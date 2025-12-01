@@ -1,44 +1,103 @@
 import { GoogleGenAI } from "@google/genai";
 import { AIModel } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+// ★重要: Cloud Runにデプロイ後、発行されたURLをここに貼り付けてください。
+// 例: "https://uspeak-backend-xxxxx-asia-northeast1.a.run.app"
+// このURLが空の場合、アプリは「デモモード」としてブラウザから直接APIを叩きます（API KEYが必要）。
+const BACKEND_API_URL = ""; 
+
+// Initialize Client-side Gemini (Fallback / Demo Mode)
+const clientSideAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Generates content using Gemini.
- * NOTE: Since we cannot securely hold client-side keys for 8 different providers in this demo environment,
- * we use Gemini to *simulate* the responses of other models by using system instructions (Personas).
- * In a real backend production app, you would route these to their respective official SDKs.
+ * Generates content using either the Cloud Run Backend (Production) or Client-side SDK (Demo).
  */
 export const generateModelResponse = async (
   model: AIModel,
   prompt: string
 ): Promise<string> => {
-  try {
-    const isNativeGemini = model.id === 'gemini';
-    
-    // For the native Gemini card, we use the standard setup.
-    // For others, we inject a system persona to simulate the style/tone.
-    const systemInstruction = isNativeGemini 
+  
+  // 各モデル用のペルソナ設定を作成
+  const isNativeGemini = model.id === 'gemini';
+  const systemInstruction = isNativeGemini 
       ? "You are a helpful AI assistant." 
       : `${model.systemPersona} IMPORTANT: You are currently running in a 'Simulation Mode' powered by Google Gemini to demonstrate how this UI works.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash', // Using Flash for speed and efficiency in parallel requests
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-      }
-    });
+  try {
+    // -----------------------------------------------------------------------
+    // MODE A: Backend API Mode (Production)
+    // -----------------------------------------------------------------------
+    if (BACKEND_API_URL) {
+      const response = await fetch(`${BACKEND_API_URL}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ 
+          prompt: prompt,
+          systemInstruction: systemInstruction 
+        })
+      });
 
-    return response.text || "No response text generated.";
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || "API_ERROR");
+      }
+
+      return data.reply || "No response text generated from backend.";
+    }
+
+    // -----------------------------------------------------------------------
+    // MODE B: Client-side SDK Mode (Demo / Preview)
+    // -----------------------------------------------------------------------
+    // バックエンドURLが設定されていない場合は、既存のクライアントサイド処理を行います。
+    
+    // リトライロジック付きで実行
+    return await generateWithRetry(model.name, () => 
+      clientSideAi.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.7,
+        }
+      })
+    );
 
   } catch (error) {
     console.error(`Error generating content for ${model.name}:`, error);
     if (error instanceof Error) {
+        // API制限のエラーなどをユーザーフレンドリーに表示
+        if (error.message.includes("429")) {
+          return "混雑のためアクセスが制限されています。少し待ってから再試行してください。";
+        }
         return `Error: ${error.message}`;
     }
     return "An unexpected error occurred.";
   }
 };
+
+// Helper: Retry logic for client-side calls to handle rate limits
+async function generateWithRetry(
+    modelName: string, 
+    apiCall: () => Promise<any>, 
+    retries = 1, 
+    delay = 2000
+): Promise<string> {
+    try {
+        const response = await apiCall();
+        return response.text || "No response text generated.";
+    } catch (error: any) {
+        if (retries > 0 && (error.message?.includes("429") || error.message?.includes("503"))) {
+            console.warn(`Retrying for ${modelName} in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return generateWithRetry(modelName, apiCall, retries - 1, delay * 2);
+        }
+        throw error;
+    }
+}
