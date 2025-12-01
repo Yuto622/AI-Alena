@@ -1,10 +1,12 @@
+# ---- ビルドステージ ----
 FROM node:20 AS builder
 
 WORKDIR /app
 
 # 依存関係インストール
+# npm ci → npm install に変更（package-lock.json が無いため）
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # ソースコピー
 COPY . .
@@ -17,13 +19,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# server.mjs と package.json だけコピー
+# server.mjs と package.json をコピー
 COPY package*.json ./
 COPY server.mjs ./server.mjs
+
 # dist もコピー
 COPY --from=builder /app/dist ./dist
 
-# 本番用の依存関係だけ入れる
+# 本番用の依存関係だけインストール
 RUN npm install --only=production
 
 ENV NODE_ENV=production
