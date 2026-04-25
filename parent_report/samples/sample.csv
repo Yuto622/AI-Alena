@@ -1,0 +1,12 @@
+student_name,parent_name,grade,eiken_level,play_date,play_minutes,words_attempted,words_correct,sentences_spoken,missions_completed,weak_words
+田中太郎,田中花子,小3,5級,2026-04-01,25,40,30,18,3,"apple,banana,orange"
+田中太郎,田中花子,小3,5級,2026-04-03,30,50,42,22,4,"banana,grape"
+田中太郎,田中花子,小3,5級,2026-04-08,20,35,28,15,2,"banana,melon"
+田中太郎,田中花子,小3,5級,2026-04-15,35,60,52,28,5,"grape,melon,peach"
+佐藤美咲,佐藤健一,小4,4級,2026-04-02,40,55,48,30,4,"difficult,through,although"
+佐藤美咲,佐藤健一,小4,4級,2026-04-05,45,65,58,35,5,"through,enough"
+佐藤美咲,佐藤健一,小4,4級,2026-04-10,30,50,40,25,3,"although,thought"
+佐藤美咲,佐藤健一,小4,4級,2026-04-18,50,70,65,40,6,"thought,enough"
+鈴木一郎,鈴木由美,小2,5級,2026-04-04,15,25,18,10,2,"cat,dog,bird"
+鈴木一郎,鈴木由美,小2,5級,2026-04-09,20,30,25,12,3,"dog,fish"
+鈴木一郎,鈴木由美,小2,5級,2026-04-16,25,40,34,16,4,"bird,fish,pig"

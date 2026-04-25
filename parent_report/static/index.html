@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>保護者向けAI分析レポート生成ツール</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --primary: #2c3e50;
+      --accent: #4c9aff;
+      --accent-hover: #2d7dd6;
+      --success: #36b37e;
+      --border: #e1e5ea;
+      --muted: #607080;
+      --danger: #e74c3c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+        "Yu Gothic", "Meiryo", sans-serif;
+      background: var(--bg);
+      color: #222;
+    }
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 20px 32px;
+    }
+    header h1 { margin: 0; font-size: 20px; }
+    header p { margin: 4px 0 0; opacity: 0.75; font-size: 13px; }
+    main {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 24px;
+      display: grid;
+      gap: 20px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 20px 24px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: var(--primary);
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+    .dropzone {
+      border: 2px dashed #bbb;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: #eef5ff;
+      color: var(--accent);
+    }
+    .dropzone strong { color: var(--primary); }
+    .dropzone input { display: none; }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 18px;
+    }
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--success); }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .controls label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .controls input[type="date"] {
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    button {
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: #fff;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .student-list {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .student {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      gap: 12px;
+      background: #fafbfc;
+    }
+    .student input[type="checkbox"] {
+      transform: scale(1.2);
+      cursor: pointer;
+    }
+    .student .name { font-weight: 600; min-width: 120px; }
+    .student .meta { color: var(--muted); font-size: 12px; flex: 1; }
+    .footer-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>保護者向けAI分析レポート生成ツール</h1>
+    <p>U-Speak Roblox — CSVをアップロードしてPDFレポートを生成します</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>1. CSVアップロード</h2>
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <div>
+          <strong>ここにCSVをドラッグ</strong> または クリックして選択<br />
+          <small>UTF-8 (BOMあり可) / 必須カラム: student_name, parent_name, grade, eiken_level, play_date, play_minutes, words_attempted, words_correct, sentences_spoken, missions_completed, weak_words</small>
+        </div>
+        <input type="file" id="fileInput" accept=".csv,text/csv" />
+      </label>
+      <div class="status" id="uploadStatus"></div>
+    </section>
+
+    <section class="card" id="studentCard" style="display:none;">
+      <h2>2. 生徒選択と期間指定</h2>
+      <div class="controls">
+        <button id="selectAllBtn" type="button">全員選択</button>
+        <button id="clearAllBtn" type="button">選択解除</button>
+        <label>開始日 <input type="date" id="startDate" /></label>
+        <label>終了日 <input type="date" id="endDate" /></label>
+      </div>
+      <div class="student-list" id="studentList"></div>
+      <div class="footer-note">※ 空欄の日付は「全期間」として扱われます。</div>
+    </section>
+
+    <section class="card" id="generateCard" style="display:none;">
+      <h2>3. PDFレポート生成</h2>
+      <button class="primary" id="generateBtn" type="button">選択した生徒のレポートをダウンロード</button>
+      <div class="status" id="generateStatus"></div>
+    </section>
+  </main>
+
+  <script>
+    const state = { sessionId: null, students: [] };
+
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const studentCard = document.getElementById("studentCard");
+    const studentList = document.getElementById("studentList");
+    const selectAllBtn = document.getElementById("selectAllBtn");
+    const clearAllBtn = document.getElementById("clearAllBtn");
+    const startDate = document.getElementById("startDate");
+    const endDate = document.getElementById("endDate");
+    const generateCard = document.getElementById("generateCard");
+    const generateBtn = document.getElementById("generateBtn");
+    const generateStatus = document.getElementById("generateStatus");
+
+    function setStatus(el, msg, kind) {
+      el.textContent = msg || "";
+      el.className = "status" + (kind ? " " + kind : "");
+    }
+
+    ["dragenter", "dragover"].forEach((ev) =>
+      dropzone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+      })
+    );
+    ["dragleave", "drop"].forEach((ev) =>
+      dropzone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+      })
+    );
+    dropzone.addEventListener("drop", (e) => {
+      const f = e.dataTransfer.files[0];
+      if (f) uploadFile(f);
+    });
+    fileInput.addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      if (f) uploadFile(f);
+    });
+
+    async function uploadFile(file) {
+      setStatus(uploadStatus, "アップロード中...", "");
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "アップロードに失敗しました");
+        state.sessionId = data.session_id;
+        state.students = data.students;
+        setStatus(uploadStatus, `読み込み完了: ${data.students.length}名の生徒を検出しました`, "success");
+        renderStudents();
+        studentCard.style.display = "block";
+        generateCard.style.display = "block";
+      } catch (err) {
+        setStatus(uploadStatus, err.message, "error");
+      }
+    }
+
+    function renderStudents() {
+      studentList.innerHTML = "";
+      state.students.forEach((s, i) => {
+        const row = document.createElement("label");
+        row.className = "student";
+        row.innerHTML = `
+          <input type="checkbox" data-name="${encodeURIComponent(s.student_name)}" checked />
+          <span class="name">${escapeHtml(s.student_name)} さん</span>
+          <span class="meta">${escapeHtml(s.grade)} / 英検${escapeHtml(s.eiken_level)} / 保護者: ${escapeHtml(s.parent_name)} 様</span>
+          <span class="meta">${s.sessions}回・${s.total_minutes}分 (${s.min_date} 〜 ${s.max_date})</span>
+        `;
+        studentList.appendChild(row);
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+      );
+    }
+
+    selectAllBtn.addEventListener("click", () => {
+      studentList.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = true));
+    });
+    clearAllBtn.addEventListener("click", () => {
+      studentList.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
+    });
+
+    generateBtn.addEventListener("click", async () => {
+      if (!state.sessionId) return;
+      const selected = Array.from(studentList.querySelectorAll("input[type=checkbox]:checked"))
+        .map((c) => decodeURIComponent(c.dataset.name));
+      if (selected.length === 0) {
+        setStatus(generateStatus, "生徒を1名以上選択してください", "error");
+        return;
+      }
+      generateBtn.disabled = true;
+      generateStatus.innerHTML = '<span class="spinner" style="border-color:#4c9aff;border-top-color:transparent;"></span>PDFを生成中... (AIコメント生成を含むため少々お待ちください)';
+      generateStatus.className = "status";
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: state.sessionId,
+            student_names: selected,
+            start_date: startDate.value || null,
+            end_date: endDate.value || null,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || "PDF生成に失敗しました");
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "parent_report.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setStatus(generateStatus, `${selected.length}名分のPDFをダウンロードしました`, "success");
+      } catch (err) {
+        setStatus(generateStatus, err.message, "error");
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
