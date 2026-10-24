@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# note-writer
+note-writer/.auth/
+note-writer/out/
