@@ -20,3 +20,9 @@ node note-writer/publish.mjs note-writer/articles/xxx.md          # 公開
 - 公開と公開の間は 3 時間以上空ける（`NOTE_MIN_INTERVAL_HOURS` で変更可。`--force` で無視）。
 - 公開履歴は `published.json`、各ステップの画面は `out/` に残る。
 - 画面が想定と違ったときは、公開せずに下書き保存して止まる。
+
+## U-Speak Lab（BtoB）用
+
+- 別アカウントで動かす：`--account uspeak`（環境変数は `NOTE_USPEAK_EMAIL` / `NOTE_USPEAK_PASSWORD`）
+- 記事の冒頭に `cta: uspeak` と書くと、`cta/uspeak.md`（TimeRex の予約リンク入り）が記事の最後に付く
+- `cta/uspeak.md` の `{{TIMEREX_URL}}` を実際の URL に置き換えるまでは公開できない

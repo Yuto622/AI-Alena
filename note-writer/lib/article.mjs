@@ -1,5 +1,7 @@
 // 記事ファイル（Markdown + 先頭のメタ情報）を読み込み、note に貼れる HTML に変換する
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const PAID_MARKER = "<!-- paid -->";
 
@@ -38,7 +40,9 @@ export function markdownToBlocks(md) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
-    if (line.startsWith("```")) {
+    if (line.trim() === "---") {
+      blocks.push("<hr>");
+    } else if (line.startsWith("```")) {
       const code = [];
       for (i++; i < lines.length && !lines[i].startsWith("```"); i++) code.push(lines[i]);
       blocks.push(`<pre><code>${inline(code.join("\n"))}</code></pre>`);
@@ -81,6 +85,13 @@ export function loadArticle(file) {
   }
   const freeBlocks = markdownToBlocks(free);
   const paidBlocks = paid === undefined ? [] : markdownToBlocks(paid);
+  // cta: uspeak のように指定すると、cta/uspeak.md を記事の最後に付ける
+  if (meta.cta) {
+    const ctaFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "cta", `${meta.cta}.md`);
+    const cta = fs.readFileSync(ctaFile, "utf8");
+    if (cta.includes("{{")) throw new Error(`${ctaFile}: 未設定の {{...}} が残っています`);
+    (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(cta));
+  }
   return {
     file,
     title: meta.title,

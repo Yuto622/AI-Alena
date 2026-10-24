@@ -3,8 +3,9 @@
 //   node note-writer/publish.mjs --check                 ログインできるかだけ確認
 //   node note-writer/publish.mjs articles/xxx.md --draft 下書き保存まで
 //   node note-writer/publish.mjs articles/xxx.md         公開まで
+//   ... --account uspeak                                  U-Speak Lab のアカウントで実行
 //
-// 必要な環境変数: NOTE_EMAIL, NOTE_PASSWORD
+// 必要な環境変数: NOTE_EMAIL, NOTE_PASSWORD（--account uspeak なら NOTE_USPEAK_EMAIL, NOTE_USPEAK_PASSWORD）
 // 各ステップのスクリーンショットは note-writer/out/ に保存される。
 // 途中で画面が想定と違ったら、公開せずに下書き保存して止まる。
 import fs from "fs";
@@ -16,14 +17,19 @@ import { loadArticle } from "./lib/article.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
+const args = process.argv.slice(2);
+// --account uspeak のように指定すると、アカウントごとに別のログイン情報・履歴を使う
+const accountIdx = args.indexOf("--account");
+const account = accountIdx >= 0 ? args.splice(accountIdx, 2)[1] : "default";
+const ENV_PREFIX = account === "default" ? "NOTE" : `NOTE_${account.toUpperCase()}`;
+
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(ROOT, "out");
-const AUTH = path.join(ROOT, ".auth", "note.json");
-const LOG = path.join(ROOT, "published.json");
+const AUTH = path.join(ROOT, ".auth", `${account}.json`);
+const LOG = path.join(ROOT, account === "default" ? "published.json" : `published-${account}.json`);
 // 連投でスパム扱いされないよう、公開と公開の間を空ける
 const MIN_INTERVAL_HOURS = Number(process.env.NOTE_MIN_INTERVAL_HOURS || 3);
 
-const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
 const draftOnly = args.includes("--draft");
 const force = args.includes("--force");
@@ -63,8 +69,9 @@ async function login(context) {
     console.log("✅ 保存済みのログイン状態を使用");
     return page;
   }
-  const { NOTE_EMAIL, NOTE_PASSWORD } = process.env;
-  if (!NOTE_EMAIL || !NOTE_PASSWORD) throw new Error("NOTE_EMAIL / NOTE_PASSWORD が設定されていません");
+  const NOTE_EMAIL = process.env[`${ENV_PREFIX}_EMAIL`];
+  const NOTE_PASSWORD = process.env[`${ENV_PREFIX}_PASSWORD`];
+  if (!NOTE_EMAIL || !NOTE_PASSWORD) throw new Error(`${ENV_PREFIX}_EMAIL / ${ENV_PREFIX}_PASSWORD が設定されていません`);
   await page.goto("https://note.com/login", { waitUntil: "domcontentloaded" });
   await (await first(page, ["#email", 'input[name="login"]', 'input[type="email"]', 'input[placeholder*="メール"]']))
     .fill(NOTE_EMAIL);
