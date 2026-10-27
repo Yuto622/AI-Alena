@@ -47,9 +47,59 @@ export function setCredentials(account, { email, password }) {
   all[account] = { email, password: password ? encrypt(password) : prev.password };
   writeJson(FILE, all);
   // 別のアカウントのログイン状態が残っていると、そちらで投稿してしまうので消す
-  fs.rmSync(path.join(paths.auth, `${account}.json`), { force: true });
+  fs.rmSync(sessionFile(account), { force: true });
+}
+
+// ブラウザの開発者ツールで写した Cookie ヘッダー（"a=1; b=2; ..."）から、ログイン済みの状態を作る。
+// サーバーからパスワードでログインすると note に止められることがあるため、こちらが基本
+export function setSessionCookies(account, cookieHeader) {
+  if (!/^[a-z0-9_-]+$/.test(account)) throw new Error(`不正なアカウント名: ${account}`);
+  const cookies = String(cookieHeader).replace(/^cookie:\s*/i, "").split(";")
+    .map((pair) => pair.trim())
+    .filter((pair) => pair.includes("="))
+    .map((pair) => {
+      const i = pair.indexOf("=");
+      return {
+        name: pair.slice(0, i).trim(),
+        value: pair.slice(i + 1).trim(),
+        domain: ".note.com",
+        path: "/",
+        expires: -1,
+        httpOnly: false,
+        secure: true,
+        sameSite: "Lax",
+      };
+    });
+  if (cookies.length < 2) throw new Error("Cookie が読み取れません。説明どおり cookie の値をまるごと貼ってください");
+  saveSession(account, { cookies, origins: [] });
+  return cookies.length;
+}
+
+// ログイン状態（Playwright の storageState）はパスワードと同じ扱いで、暗号化して保存する
+const sessionFile = (account) => path.join(paths.auth, `${account}.enc`);
+
+export function saveSession(account, state) {
+  fs.mkdirSync(paths.auth, { recursive: true });
+  fs.writeFileSync(sessionFile(account), encrypt(JSON.stringify(state)));
+}
+
+export function loadSession(account) {
+  if (!fs.existsSync(sessionFile(account))) return null;
+  return JSON.parse(decrypt(fs.readFileSync(sessionFile(account), "utf8")));
+}
+
+export function hasSession(account) {
+  return fs.existsSync(sessionFile(account));
 }
 
 export function listCredentials() {
-  return Object.entries(readJson(FILE, {})).map(([account, v]) => ({ account, email: v.email, hasPassword: true }));
+  const saved = readJson(FILE, {});
+  const names = new Set([...Object.keys(saved), ...(fs.existsSync(paths.auth)
+    ? fs.readdirSync(paths.auth).filter((f) => f.endsWith(".enc")).map((f) => f.slice(0, -4)) : [])]);
+  return [...names].map((account) => ({
+    account,
+    email: saved[account]?.email || "",
+    hasPassword: !!saved[account],
+    hasSession: hasSession(account),
+  }));
 }

@@ -117,6 +117,15 @@
       <div class="actions"><button class="btn primary" onclick="saveAccount()">保存</button>
         <button class="btn" onclick="act('/api/check-login', {account:$('aName').value}, 'ログイン確認')">このアカウントでログイン確認</button></div>
       <p><small>パスワードは暗号化して保存し、画面には表示しません。</small></p>
+      <h3 style="margin-top:20px">ログイン状態を貼る（サーバーからのログインが止められるとき）</h3>
+      <ol>
+        <li>いつものブラウザ（Chrome / Edge）で note.com にログインした状態で、note.com のトップを開く</li>
+        <li><b>F12</b> を押し、上のタブの「<b>ネットワーク</b>（Network）」を開いてから、<b>F5</b> で再読み込み</li>
+        <li>一覧のいちばん上の「note.com」をクリック →「<b>ヘッダー</b>」→「要求ヘッダー（Request Headers）」の「<b>cookie:</b>」の右の値を、右クリック → 値をコピー</li>
+        <li>下に貼って「ログイン状態を保存」→「このアカウントでログイン確認」</li>
+      </ol>
+      <textarea id="aCookie" style="min-height:90px" placeholder="cookie の値をここに貼る（他人には見せないでください）"></textarea>
+      <div class="actions"><button class="btn primary" onclick="saveCookie()">ログイン状態を保存</button></div>
     </div>
     <div class="card">
       <div class="row">
@@ -250,10 +259,17 @@ async function loadLogs() {
 async function loadAccounts() {
   const list = await api("/api/accounts");
   $("accounts").innerHTML = list.length
-    ? "<p>" + list.map((a) => `<b>${esc(a.account)}</b>：${esc(a.email)}（パスワード設定済み）`).join("<br>") + "</p>"
+    ? "<p>" + list.map((a) => `<b>${esc(a.account)}</b>：${esc(a.email || "（メール未設定）")}
+        ${a.hasPassword ? "／パスワード設定済み" : ""}${a.hasSession ? "／ログイン状態あり" : ""}`).join("<br>") + "</p>"
     : "<p><b>まだ設定されていません。</b>下で入れると、公開できるようになります。</p>";
   const cur = list.find((a) => a.account === $("aName").value);
   if (cur && !$("aEmail").value) $("aEmail").value = cur.email;
+}
+async function saveCookie() {
+  try {
+    const r = await api(`/api/accounts/${encodeURIComponent($("aName").value.trim())}/cookies`, "PUT", { cookie:$("aCookie").value });
+    $("aCookie").value = ""; toast(`保存しました（${r.count} 件）。「このアカウントでログイン確認」で試してください`); loadAccounts();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
 }
 async function saveAccount() {
   try {

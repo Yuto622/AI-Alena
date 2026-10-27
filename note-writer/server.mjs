@@ -8,7 +8,7 @@ import { listArticles, readArticleSource, writeArticleSource, articlePath } from
 import { runNote } from "./lib/publisher.mjs";
 import { tick, publishArticle, generateNext, nextFreeSlot } from "./lib/scheduler.mjs";
 import { dashboard } from "./lib/insights.mjs";
-import { listCredentials, setCredentials } from "./lib/credentials.mjs";
+import { listCredentials, setCredentials, setSessionCookies } from "./lib/credentials.mjs";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
 } from "./lib/store.mjs";
@@ -109,6 +109,11 @@ app.put("/api/accounts/:account", wrap((req) => {
   if (!email) throw new Error("メールアドレスを入力してください");
   setCredentials(req.params.account, { email, password: req.body.password || "" });
   return { ok: true };
+}));
+
+app.put("/api/accounts/:account/cookies", wrap((req) => {
+  const count = setSessionCookies(req.params.account, req.body.cookie || "");
+  return { ok: true, count };
 }));
 
 app.get("/api/settings", wrap(() => ({

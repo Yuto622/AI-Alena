@@ -6,7 +6,7 @@ import path from "path";
 import { createRequire } from "module";
 import { paths } from "./config.mjs";
 import { getPublished, addPublished, getSettings } from "./store.mjs";
-import { getCredentials } from "./credentials.mjs";
+import { getCredentials, saveSession, loadSession, hasSession } from "./credentials.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -49,14 +49,27 @@ class Run {
   }
 }
 
+// ログイン済みなら、トップの右上に「ログイン」へのリンクが出ない
+async function isLoggedIn(page) {
+  await page.goto("https://note.com/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
+  const loginLink = await page.locator('a[href*="/login"]:visible, button:has-text("ログイン"):visible').count();
+  return loginLink === 0;
+}
+
 async function login(context, account, run) {
   const page = await context.newPage();
-  await page.goto("https://note.com/", { waitUntil: "domcontentloaded" });
-  const loggedIn = await page.locator('a[href*="/notes/new"], a:has-text("投稿")').first()
-    .isVisible({ timeout: 5000 }).catch(() => false);
+  const loggedIn = await isLoggedIn(page);
+  await run.shot(page, "top");
   if (loggedIn) {
     run.info("✅ 保存済みのログイン状態を使用");
+    // note が更新した Cookie を保存し直して、ログイン状態を長持ちさせる
+    saveSession(account, await context.storageState());
     return page;
+  }
+  // 貼ったログイン状態が切れているときに、パスワードで何度も試すと note に止められるので、ここで止める
+  if (hasSession(account)) {
+    throw new Error("保存したログイン状態が切れています。管理画面の「設定」でログイン状態（cookie）を貼り直してください");
   }
   const { email, password } = getCredentials(account);
   if (!email || !password) {
@@ -70,10 +83,9 @@ async function login(context, account, run) {
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 }).catch(() => {});
   await run.shot(page, "after-login");
   if (new URL(page.url()).pathname.startsWith("/login")) {
-    throw new Error("ログインできませんでした（ロボット確認・追加認証の可能性。スクリーンショットを確認）");
+    throw new Error("サーバーからのログインを note に止められました。管理画面の「設定」で、ブラウザのログイン状態（cookie）を貼ってください");
   }
-  fs.mkdirSync(paths.auth, { recursive: true });
-  await context.storageState({ path: path.join(paths.auth, `${account}.json`) });
+  saveSession(account, await context.storageState());
   run.info("✅ ログイン成功");
   return page;
 }
@@ -171,16 +183,19 @@ export function runNote({ account = "default", article = null, mode = "publish",
     if (mode === "publish") assertPublishable(article, { force });
     const { chromium } = require("playwright");
     const run = new Run(mode);
-    const authFile = path.join(paths.auth, `${account}.json`);
+    const session = loadSession(account);
     const { email, password } = getCredentials(account);
-    if (!fs.existsSync(authFile) && (!email || !password)) {
+    if (!session && (!email || !password)) {
       throw new Error(`note のログイン情報（アカウント: ${account}）が未設定です。管理画面の「設定」で入れてください`);
     }
     const browser = await chromium.launch();
     const context = await browser.newContext({
+      // 既定の User-Agent は "HeadlessChrome" を名乗り、自動操作として止められやすい
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+      timezoneId: "Asia/Tokyo",
       locale: "ja-JP",
       viewport: { width: 1280, height: 900 },
-      ...(fs.existsSync(authFile) ? { storageState: authFile } : {}),
+      ...(session ? { storageState: session } : {}),
     });
     let page;
     try {
