@@ -23,8 +23,17 @@ if command -v cygpath >/dev/null 2>&1; then
   export MSYS_NO_PATHCONV=1
   DIR="$(cygpath -w "$DIR")"
   if ! command -v gcloud >/dev/null 2>&1 || ! gcloud --version >/dev/null 2>&1; then
-    # gcloud.cmd の出力は行末に \r が付くので取り除く
-    gcloud() { gcloud.cmd "$@" | tr -d '\r'; }
+    # gcloud.cmd を経由すると、空白を含む引数（"5 * * * *" など）を cmd.exe が壊すので、
+    # SDK 同梱の Python で gcloud.py を直接動かす。出力の行末の \r は取り除く
+    SDK_ROOT="$(dirname "$(dirname "$(command -v gcloud.cmd)")")"
+    GCLOUD_PY="$SDK_ROOT/platform/bundledpython/python.exe"
+    [ -x "$GCLOUD_PY" ] || GCLOUD_PY="$(command -v python3 || command -v python || true)"
+    if [ -n "$GCLOUD_PY" ]; then
+      GCLOUD_MAIN="$(cygpath -w "$SDK_ROOT/lib/gcloud.py")"
+      gcloud() { "$GCLOUD_PY" -S "$GCLOUD_MAIN" "$@" | tr -d '\r'; }
+    else
+      gcloud() { gcloud.cmd "$@" | tr -d '\r'; }
+    fi
   fi
 fi
 winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
