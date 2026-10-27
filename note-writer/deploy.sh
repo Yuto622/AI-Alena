@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # note-writer を Google Cloud にデプロイする。固定費をほぼゼロにする構成：
 #   - Cloud Run：最小0台（アクセスがない間は課金なし）、最大1台（二重投稿防止も兼ねる）
+#     公開は IAM チェックを外す方式（allUsers を付けられないプロジェクトでも動く。管理画面は Basic 認証で守る）
 #   - データ：Cloud Storage を /data にマウント（us-central1 は無料枠の対象リージョン）
 #   - 予約実行：Cloud Scheduler 1ジョブ（請求先アカウントあたり3ジョブまで無料）
 #   - 秘密情報：Secret Manager 5件（6件まで無料）
@@ -37,23 +38,33 @@ if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
   gcloud storage buckets create "gs://$BUCKET" --location="$REGION" --uniform-bucket-level-access
 fi
 
-# 秘密情報（既にあれば作り直さない）
-secret() {
+# 秘密情報。中身（有効なバージョン）があれば触らない。入れ物だけで中身が空なら入れ直す
+has_value() {
+  [ -n "$(gcloud secrets versions list "$1" --filter='state:ENABLED' --limit=1 --format='value(name)' 2>/dev/null)" ]
+}
+put_secret() {
   local name="$1" value="$2"
-  if ! gcloud secrets describe "$name" >/dev/null 2>&1; then
+  if gcloud secrets describe "$name" >/dev/null 2>&1; then
+    printf '%s' "$value" | gcloud secrets versions add "$name" --data-file=-
+  else
     printf '%s' "$value" | gcloud secrets create "$name" --replication-policy=automatic --data-file=-
   fi
 }
-ask() { local v; read -r -s -p "$1: " v; echo >&2; printf '%s' "$v"; }
-gcloud secrets describe NOTE_EMAIL >/dev/null 2>&1 || secret NOTE_EMAIL "$(ask 'note のメールアドレス')"
-gcloud secrets describe NOTE_PASSWORD >/dev/null 2>&1 || secret NOTE_PASSWORD "$(ask 'note のパスワード')"
-gcloud secrets describe ANTHROPIC_API_KEY >/dev/null 2>&1 || secret ANTHROPIC_API_KEY "$(ask 'Anthropic API キー')"
-if ! gcloud secrets describe ADMIN_PASSWORD >/dev/null 2>&1; then
-  ADMIN_PASSWORD="$(openssl rand -base64 18)"
-  secret ADMIN_PASSWORD "$ADMIN_PASSWORD"
+# 空のまま Enter されたら聞き直す（空の秘密情報だとデプロイが失敗するため）
+ask() {
+  local v=""
+  while [ -z "$v" ]; do read -r -s -p "$1: " v; echo >&2; done
+  printf '%s' "$v"
+}
+has_value NOTE_EMAIL || put_secret NOTE_EMAIL "$(ask 'note のメールアドレス（入力しても表示されません）')"
+has_value NOTE_PASSWORD || put_secret NOTE_PASSWORD "$(ask 'note のパスワード')"
+has_value ANTHROPIC_API_KEY || put_secret ANTHROPIC_API_KEY "$(ask 'Anthropic API キー')"
+if ! has_value ADMIN_PASSWORD; then
+  ADMIN_PASSWORD="$(openssl rand -hex 12)"
+  put_secret ADMIN_PASSWORD "$ADMIN_PASSWORD"
   echo "管理画面のパスワード（ユーザー名は admin）: $ADMIN_PASSWORD  ← 控えておく"
 fi
-secret CRON_TOKEN "$(openssl rand -hex 24)"
+has_value CRON_TOKEN || put_secret CRON_TOKEN "$(openssl rand -hex 24)"
 
 # Cloud Run の実行アカウントに、秘密情報とデータ置き場の権限を付ける
 SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
@@ -76,7 +87,7 @@ gcloud run deploy "$SERVICE" --quiet \
   --cpu 1 --memory 2Gi \
   --min-instances 0 --max-instances 1 --concurrency 4 \
   --timeout 900 \
-  --allow-unauthenticated \
+  --no-invoker-iam-check \
   --add-volume "name=data,type=cloud-storage,bucket=$BUCKET" \
   --add-volume-mount "volume=data,mount-path=/data" \
   --set-env-vars "DATA_DIR=/data" \
