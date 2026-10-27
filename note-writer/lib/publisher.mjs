@@ -6,6 +6,7 @@ import path from "path";
 import { createRequire } from "module";
 import { paths } from "./config.mjs";
 import { getPublished, addPublished, getSettings } from "./store.mjs";
+import { getCredentials } from "./credentials.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -16,8 +17,6 @@ function exclusive(fn) {
   running = next.catch(() => {});
   return next;
 }
-
-export const envPrefix = (account) => (account === "default" ? "NOTE" : `NOTE_${account.toUpperCase()}`);
 
 // 候補のセレクタを順に試し、最初に見つかったものを返す
 async function first(page, selectors, timeout = 10000) {
@@ -59,10 +58,10 @@ async function login(context, account, run) {
     run.info("✅ 保存済みのログイン状態を使用");
     return page;
   }
-  const prefix = envPrefix(account);
-  const email = process.env[`${prefix}_EMAIL`];
-  const password = process.env[`${prefix}_PASSWORD`];
-  if (!email || !password) throw new Error(`${prefix}_EMAIL / ${prefix}_PASSWORD が設定されていません`);
+  const { email, password } = getCredentials(account);
+  if (!email || !password) {
+    throw new Error(`note のログイン情報（アカウント: ${account}）が未設定です。管理画面の「設定」で入れてください`);
+  }
   await page.goto("https://note.com/login", { waitUntil: "domcontentloaded" });
   await (await first(page, ["#email", 'input[name="login"]', 'input[type="email"]', 'input[placeholder*="メール"]']))
     .fill(email);
@@ -173,6 +172,10 @@ export function runNote({ account = "default", article = null, mode = "publish",
     const { chromium } = require("playwright");
     const run = new Run(mode);
     const authFile = path.join(paths.auth, `${account}.json`);
+    const { email, password } = getCredentials(account);
+    if (!fs.existsSync(authFile) && (!email || !password)) {
+      throw new Error(`note のログイン情報（アカウント: ${account}）が未設定です。管理画面の「設定」で入れてください`);
+    }
     const browser = await chromium.launch();
     const context = await browser.newContext({
       locale: "ja-JP",

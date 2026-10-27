@@ -8,6 +8,7 @@ import { listArticles, readArticleSource, writeArticleSource, articlePath } from
 import { runNote } from "./lib/publisher.mjs";
 import { tick, publishArticle, generateNext, nextFreeSlot } from "./lib/scheduler.mjs";
 import { dashboard } from "./lib/insights.mjs";
+import { listCredentials, setCredentials } from "./lib/credentials.mjs";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
 } from "./lib/store.mjs";
@@ -100,6 +101,14 @@ app.get("/api/runs", wrap(() => {
     dir,
     shots: fs.readdirSync(path.join(paths.out, dir)).sort(),
   }));
+}));
+
+app.get("/api/accounts", wrap(() => listCredentials()));
+app.put("/api/accounts/:account", wrap((req) => {
+  const email = String(req.body.email || "").trim();
+  if (!email) throw new Error("メールアドレスを入力してください");
+  setCredentials(req.params.account, { email, password: req.body.password || "" });
+  return { ok: true };
 }));
 
 app.get("/api/settings", wrap(() => ({

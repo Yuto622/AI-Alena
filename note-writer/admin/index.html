@@ -107,6 +107,17 @@
   </section>
 
   <section id="settings">
+    <div class="card"><h3>note のログイン情報</h3>
+      <div id="accounts"></div>
+      <div class="row">
+        <label><small>アカウント名（記事の account。ふつうは default）</small><input id="aName" value="default"></label>
+        <label><small>メールアドレス</small><input id="aEmail" type="email" autocomplete="off"></label>
+        <label><small>パスワード（変更するときだけ入力）</small><input id="aPass" type="password" autocomplete="new-password"></label>
+      </div>
+      <div class="actions"><button class="btn primary" onclick="saveAccount()">保存</button>
+        <button class="btn" onclick="act('/api/check-login', {account:$('aName').value}, 'ログイン確認')">このアカウントでログイン確認</button></div>
+      <p><small>パスワードは暗号化して保存し、画面には表示しません。</small></p>
+    </div>
     <div class="card">
       <div class="row">
         <label><small>月の目標（円・手取り）</small><input id="sGoal" type="number"></label>
@@ -122,7 +133,7 @@
       </div>
       <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
       <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
-        <button class="btn" onclick="act('/api/check-login', {}, 'ログイン確認')">note のログイン確認</button></div>
+</div>
     </div>
   </section>
 </main>
@@ -236,7 +247,23 @@ async function loadLogs() {
     `<a href="/shots/${encodeURIComponent(r.dir)}/${encodeURIComponent(s)}" target="_blank"><img loading="lazy" src="/shots/${encodeURIComponent(r.dir)}/${encodeURIComponent(s)}" alt="${esc(s)}"></a>`).join("")}</div></div>`).join("") || "まだ実行していません。";
 }
 
+async function loadAccounts() {
+  const list = await api("/api/accounts");
+  $("accounts").innerHTML = list.length
+    ? "<p>" + list.map((a) => `<b>${esc(a.account)}</b>：${esc(a.email)}（パスワード設定済み）`).join("<br>") + "</p>"
+    : "<p><b>まだ設定されていません。</b>下で入れると、公開できるようになります。</p>";
+  const cur = list.find((a) => a.account === $("aName").value);
+  if (cur && !$("aEmail").value) $("aEmail").value = cur.email;
+}
+async function saveAccount() {
+  try {
+    await api(`/api/accounts/${encodeURIComponent($("aName").value.trim())}`, "PUT", { email:$("aEmail").value, password:$("aPass").value });
+    $("aPass").value = ""; toast("保存しました。「ログイン確認」で試してください"); loadAccounts();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+
 async function loadSettings() {
+  loadAccounts();
   const s = await api("/api/settings");
   $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
   $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");

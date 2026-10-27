@@ -4,11 +4,11 @@
 #     公開は IAM チェックを外す方式（allUsers を付けられないプロジェクトでも動く。管理画面は Basic 認証で守る）
 #   - データ：Cloud Storage を /data にマウント（us-central1 は無料枠の対象リージョン）
 #   - 予約実行：Cloud Scheduler 1ジョブ（請求先アカウントあたり3ジョブまで無料）
-#   - 秘密情報：Secret Manager 5件（6件まで無料）
+#   - 秘密情報：Secret Manager 3件（6件まで無料）。note のログイン情報は管理画面で入れ、暗号化してデータ置き場に保存
 #   - イメージ：古いものを自動削除して保存容量を最小に
 #
 # 使い方：bash note-writer/deploy.sh <GCPプロジェクトID>
-# 初回は note のメールアドレス・パスワード・Anthropic API キーを聞かれる（画面には表示されない）
+# 初回は Anthropic API キーを聞かれる（画面には表示されない）
 set -euo pipefail
 
 PROJECT="${1:?使い方: bash note-writer/deploy.sh <GCPプロジェクトID>}"
@@ -56,8 +56,7 @@ ask() {
   while [ -z "$v" ]; do read -r -s -p "$1: " v; echo >&2; done
   printf '%s' "$v"
 }
-has_value NOTE_EMAIL || put_secret NOTE_EMAIL "$(ask 'note のメールアドレス（入力しても表示されません）')"
-has_value NOTE_PASSWORD || put_secret NOTE_PASSWORD "$(ask 'note のパスワード')"
+# note のメールアドレスとパスワードは、デプロイ後に管理画面の「設定」で入れる
 has_value ANTHROPIC_API_KEY || put_secret ANTHROPIC_API_KEY "$(ask 'Anthropic API キー')"
 if ! has_value ADMIN_PASSWORD; then
   ADMIN_PASSWORD="$(openssl rand -hex 12)"
@@ -68,7 +67,7 @@ has_value CRON_TOKEN || put_secret CRON_TOKEN "$(openssl rand -hex 24)"
 
 # Cloud Run の実行アカウントに、秘密情報とデータ置き場の権限を付ける
 SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
-for s in NOTE_EMAIL NOTE_PASSWORD ANTHROPIC_API_KEY ADMIN_PASSWORD CRON_TOKEN; do
+for s in ANTHROPIC_API_KEY ADMIN_PASSWORD CRON_TOKEN; do
   gcloud secrets add-iam-policy-binding "$s" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor >/dev/null
 done
@@ -91,7 +90,7 @@ gcloud run deploy "$SERVICE" --quiet \
   --add-volume "name=data,type=cloud-storage,bucket=$BUCKET" \
   --add-volume-mount "volume=data,mount-path=/data" \
   --set-env-vars "DATA_DIR=/data" \
-  --set-secrets "NOTE_EMAIL=NOTE_EMAIL:latest,NOTE_PASSWORD=NOTE_PASSWORD:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,ADMIN_PASSWORD=ADMIN_PASSWORD:latest,CRON_TOKEN=CRON_TOKEN:latest"
+  --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,ADMIN_PASSWORD=ADMIN_PASSWORD:latest,CRON_TOKEN=CRON_TOKEN:latest"
 }
 for attempt in 1 2 3; do
   if deploy; then break; fi
@@ -127,3 +126,4 @@ rm -f "$POLICY"
 echo
 echo "✅ デプロイ完了"
 echo "管理画面: $URL  （ユーザー名 admin）"
+echo "最初に管理画面の「設定」→「note のログイン情報」で、メールアドレスとパスワードを入れてください。"
