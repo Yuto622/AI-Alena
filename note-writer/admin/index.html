@@ -102,7 +102,7 @@
       <div class="scroll"><table id="topicList"></table></div>
       <div class="row" style="margin-top:12px">
         <input id="tTitle" placeholder="テーマ"><input id="tPrice" type="number" placeholder="価格（無料は0）" value="500">
-        <input id="tTags" placeholder="タグ（カンマ区切り）"><input id="tNotes" placeholder="メモ（実体験など）">
+        <input id="tTags" placeholder="タグ（カンマ区切り）"><select id="tAudience"></select><input id="tNotes" placeholder="メモ（実体験など）">
       </div>
       <div class="actions"><button class="btn" onclick="addTopic()">＋ 追加</button></div>
     </div>
@@ -220,8 +220,9 @@
         <label><input type="checkbox" id="sXDaily" style="width:auto"> 1日1回、過去の記事を X で再紹介する</label>
         <label><small>再紹介する時刻（日本時間の何時以降）</small><input id="sXHour" type="number" min="0" max="23"></label>
       </div>
+      <label><small>読者層と割合（1行に1つ：「割合 名前」。例：0.7 海外大学に関心のある大学生。足りない読者層のテーマから先に書く）</small><textarea id="sAudiences" style="min-height:70px"></textarea></label>
       <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
-      <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
+      <div class="actions"><button class="btn primary" onclick="saveSettings().catch((e) => toast(`保存できません：${e.message}`, 8000))">保存</button>
 </div>
     </div>
   </section>
@@ -370,15 +371,19 @@ async function saveX() {
 }
 
 let topics = [];
+let audiences = [];
+const audienceName = (id) => (audiences.find((a) => a.id === id) || audiences[0] || {}).name || "";
 async function loadTopics() {
+  audiences = (await api("/api/settings")).audiences || [];
+  $("tAudience").innerHTML = audiences.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
   topics = await api("/api/topics");
-  $("topicList").innerHTML = "<tr><th>テーマ</th><th>価格</th><th>タグ</th><th>状態</th><th></th></tr>" + topics.map((t) =>
-    `<tr><td>${esc(t.title)}${t.notes ? `<br><small>${esc(t.notes)}</small>` : ""}</td><td>${t.price ? yen(t.price) : "無料"}</td><td>${esc((t.tags || []).join(", "))}</td><td>${t.status === "todo" ? "未着手" : "生成済み"}</td>
+  $("topicList").innerHTML = "<tr><th>テーマ</th><th>読者</th><th>価格</th><th>タグ</th><th>状態</th><th></th></tr>" + topics.map((t) =>
+    `<tr><td>${esc(t.title)}${t.notes ? `<br><small>${esc(t.notes)}</small>` : ""}</td><td><small>${esc(audienceName(t.audience))}</small></td><td>${t.price ? yen(t.price) : "無料"}</td><td>${esc((t.tags || []).join(", "))}</td><td>${t.status === "todo" ? "未着手" : "生成済み"}</td>
      <td>${t.status === "todo" ? `<button class="btn" onclick="act('/api/generate', {topicId:'${esc(t.id)}'}, '生成')">今すぐ生成</button>` : ""}<button class="btn" onclick="removeTopic('${esc(t.id)}')">削除</button></td></tr>`).join("");
 }
 async function addTopic() {
   topics.push({ id:Date.now().toString(36), title:$("tTitle").value, price:Number($("tPrice").value) || 0,
-    tags:$("tTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), notes:$("tNotes").value, status:"todo" });
+    tags:$("tTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), notes:$("tNotes").value, audience:$("tAudience").value, status:"todo" });
   await api("/api/topics", "PUT", topics); $("tTitle").value = $("tNotes").value = ""; loadTopics();
 }
 async function removeTopic(id) { topics = topics.filter((t) => t.id !== id); await api("/api/topics", "PUT", topics); loadTopics(); }
@@ -437,13 +442,26 @@ async function loadSettings() {
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
   $("sDaily").value = s.dailyGenerateLimit;
   $("sHeader").checked = s.headerImage; $("sFooter").value = s.thumbnailFooter; $("sExplore").value = s.exploreRate;
+  $("sAudiences").value = (s.audiences || []).map((a) => `${a.share} ${a.name}`).join("\n");
   $("sTrend").checked = s.trendEnabled; $("sTrendWeek").value = s.trendPerWeek; $("sTrendScout").value = s.trendScoutHour; $("sTrendPub").value = s.trendPublishHour;
   $("sStats").checked = s.statsImport; $("sXPub").checked = s.xOnPublish; $("sXDaily").checked = s.xDailyPromo; $("sXHour").value = s.xDailyHour;
+}
+// 「0.7 名前」の行を読む。既存の読者層と名前が同じなら id を引き継ぐ（ネタ帳のテーマとのつながりを保つ）
+function parseAudiences() {
+  const rows = $("sAudiences").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^([0-9.]+)\s+(.+)$/);
+    if (!m) throw new Error(`読者層の行が読めません：${l}`);
+    const prev = audiences.find((a) => a.name === m[2]);
+    return { id: prev ? prev.id : "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: m[2], share: Number(m[1]) };
+  });
+  if (!rows.length) throw new Error("読者層を1つ以上書いてください");
+  return rows;
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
   await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
     bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule,
+    audiences: parseAudiences(),
     trendEnabled:$("sTrend").checked, trendPerWeek:Number($("sTrendWeek").value) || 0,
     trendScoutHour:Math.min(23, Math.max(0, Number($("sTrendScout").value) || 0)), trendPublishHour:Math.min(23, Math.max(0, Number($("sTrendPub").value) || 0)),
     statsImport:$("sStats").checked, xOnPublish:$("sXPub").checked, xDailyPromo:$("sXDaily").checked,

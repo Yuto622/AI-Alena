@@ -136,7 +136,7 @@ ${body}`, {
 }
 
 // ネタ帳が空になったら、売れたテーマに近い新しいテーマを考えさせる
-export async function suggestTopics({ existing, bestTags, count = 6 }) {
+export async function suggestTopics({ existing, bestTags, audience, count = 6 }) {
   const profile = readIfExists(paths.profile) || "（未入力）";
   const { topics } = await askJson(`note に載せる記事のテーマを ${count} 個考えてください。
 
@@ -144,7 +144,8 @@ export async function suggestTopics({ existing, bestTags, count = 6 }) {
 ${profile}
 
 ## 条件
-- 読者は、海外大学に通う・目指す日本人の学生と保護者
+- 読者は「${audience}」。この読者が検索しそうな悩み・疑問をテーマにする
+- 子どもの発達や健康・医療についての断定、特定の教室や他社の批判はしない
 - 有料（500円か980円）と無料（0円）を 2:1 くらいで混ぜる。有料は「そのまま使える手順やテンプレート」が書けるテーマにする
 - 筆者の経験がなくても、一般的な方法として正確に書けるテーマにする
 - 次のテーマと重ならないこと：${existing.join(" / ")}

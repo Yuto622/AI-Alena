@@ -72,14 +72,25 @@ export async function publishArticle(name, { mode = "publish", force = false } =
 }
 
 // ネタ帳に未着手のテーマがなければ、新しいテーマを足す
-async function refillTopics(topics) {
-  if (topics.some((t) => t.status === "todo")) return topics;
-  const fresh = await suggestTopics({ existing: topics.map((t) => t.title), bestTags: bestTags() });
+// 読者層ごとの割合と、最近書いた記事の割合を比べて、一番足りない読者層を選ぶ
+function nextAudience(topics) {
+  const audiences = getSettings().audiences;
+  const recent = topics.filter((t) => t.writtenAt).sort((a, b) => b.writtenAt.localeCompare(a.writtenAt)).slice(0, 10);
+  const share = (id) => recent.filter((t) => (t.audience || audiences[0].id) === id).length / Math.max(recent.length, 1);
+  return [...audiences].sort((a, b) => (b.share - share(b.id)) - (a.share - share(a.id)))[0];
+}
+
+// その読者層の未着手のテーマがなければ、新しいテーマを足す
+async function refillTopics(topics, audience) {
+  const defaultId = getSettings().audiences[0].id;
+  if (topics.some((t) => t.status === "todo" && (t.audience || defaultId) === audience.id)) return topics;
+  const fresh = await suggestTopics({ existing: topics.map((t) => t.title), bestTags: bestTags(), audience: audience.name });
   const added = fresh.map((t, i) => ({
     id: `${Date.now().toString(36)}${i}`,
     title: t.title,
     price: [0, 500, 980].includes(t.price) ? t.price : 500,
     tags: t.tags,
+    audience: audience.id,
     status: "todo",
     auto: true,
   }));
@@ -90,10 +101,16 @@ async function refillTopics(topics) {
 
 // 次のテーマを1本書いて、空いている枠に予約する。自動チェックに通ったものだけ公開OKにする
 export async function generateNext(topicId) {
-  const topics = topicId ? getTopics() : await refillTopics(getTopics());
-  const topic = topicId
-    ? topics.find((t) => t.id === topicId)
-    : rankTopics(topics.filter((t) => t.status === "todo"))[0];
+  let topics = getTopics();
+  let topic;
+  if (topicId) {
+    topic = topics.find((t) => t.id === topicId);
+  } else {
+    const audience = nextAudience(topics);
+    topics = await refillTopics(topics, audience);
+    const defaultId = getSettings().audiences[0].id;
+    topic = rankTopics(topics.filter((t) => t.status === "todo" && (t.audience || defaultId) === audience.id))[0];
+  }
   if (!topic) throw new Error("書けるテーマがありません（ネタ帳に追加してください）");
   const { meta, body } = await generateArticle(topic);
   const review = await reviewArticle(meta, body);

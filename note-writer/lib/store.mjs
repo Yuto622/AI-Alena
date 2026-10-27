@@ -14,6 +14,11 @@ export const DEFAULT_SETTINGS = {
   // note の手数料率の概算（実際の率は note の規約で確認して設定）
   feeRate: 0.15,
   autoGenerate: true,
+  // 読者層と、記事に占める割合。足りない読者層のテーマから先に書く（1つ目は、読者層の指定がないテーマの行き先）
+  audiences: [
+    { id: "abroad", name: "海外大学・留学・英語学習に関心のある大学生・社会人と、その保護者", share: 0.7 },
+    { id: "kids", name: "子どもに英語を習わせている・英検を受けさせたい小学生の保護者と、英語教室の先生", share: 0.3 },
+  ],
   // true なら、自動チェックに通った記事を人の確認なしで公開予約する（通らなければ下書きで止まる）
   autoApprove: true,
   // 公開予約が何本を下回ったら次の記事を生成するか
@@ -35,7 +40,7 @@ export const DEFAULT_SETTINGS = {
   xDailyHour: 12,
   // アプリ選びで、まだ試していないアプリを選ぶ割合（データ集め）
   exploreRate: 0.2,
-  thumbnailFooter: "UCLA 在学生が書く 英語と海外大学のはなし",
+  thumbnailFooter: "UCLA 在学生が書く 英語のはなし",
 };
 
 export function readJson(file, fallback) {
