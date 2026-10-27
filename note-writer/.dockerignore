@@ -5,3 +5,4 @@ published*.json
 sales.json
 settings.json
 deploy.sh
+.deploy-lf.sh

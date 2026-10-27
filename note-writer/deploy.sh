@@ -16,6 +16,18 @@ SERVICE="note-writer"
 BUCKET="${PROJECT}-note-writer-data"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Windows（Git for Windows の bash）で動かすとき：
+# gcloud は gcloud.cmd として入っている。また "/data" のような引数を Windows のパスに書き換えられないようにする
+if command -v cygpath >/dev/null 2>&1; then
+  export MSYS_NO_PATHCONV=1
+  DIR="$(cygpath -w "$DIR")"
+  if ! command -v gcloud >/dev/null 2>&1 || ! gcloud --version >/dev/null 2>&1; then
+    # gcloud.cmd の出力は行末に \r が付くので取り除く
+    gcloud() { gcloud.cmd "$@" | tr -d '\r'; }
+  fi
+fi
+winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+
 gcloud config set project "$PROJECT" >/dev/null
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
   cloudscheduler.googleapis.com secretmanager.googleapis.com storage.googleapis.com
@@ -53,7 +65,7 @@ gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAc
   --role=roles/storage.objectUser >/dev/null
 
 # ビルドとデプロイ
-gcloud run deploy "$SERVICE" \
+gcloud run deploy "$SERVICE" --quiet \
   --source "$DIR" \
   --region "$REGION" \
   --execution-environment gen2 \
@@ -87,7 +99,7 @@ cat > "$POLICY" <<'EOF'
 ]
 EOF
 gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
-  --location "$REGION" --policy "$POLICY" --no-dry-run >/dev/null || echo "（イメージの自動削除の設定はスキップしました）"
+  --location "$REGION" --policy "$(winpath "$POLICY")" --no-dry-run >/dev/null || echo "（イメージの自動削除の設定はスキップしました）"
 rm -f "$POLICY"
 
 echo
