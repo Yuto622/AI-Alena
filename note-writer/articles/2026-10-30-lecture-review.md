@@ -2,7 +2,7 @@
 title: 英語が第二言語でも海外大学の講義についていく予習・復習の型
 price: 500
 tags: [海外大学, 留学, 勉強法, 英語, 理系]
-status: draft
+status: ready
 publish_at: 2026-10-30T11:00:00.000Z
 topic: lecture-review
 ---

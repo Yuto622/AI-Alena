@@ -2,7 +2,7 @@
 title: 海外大学の教授へのメールの書き方【そのまま使えるテンプレ5つ】
 price: 0
 tags: [海外大学, 留学, 英語メール, 大学生活]
-status: draft
+status: ready
 publish_at: 2026-11-02T11:00:00.000Z
 topic: professor-email
 ---

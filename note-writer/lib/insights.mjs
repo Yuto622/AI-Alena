@@ -17,6 +17,14 @@ function tagRevenue(articles, sales) {
   return score;
 }
 
+export function bestTags(n = 3) {
+  return Object.entries(tagRevenue(listArticles(), getSales()))
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([tag]) => tag);
+}
+
 // 売れたタグを多く含むテーマを先に書く。売上データがなければネタ帳の順番どおり
 export function rankTopics(topics) {
   const score = tagRevenue(listArticles(), getSales());
@@ -87,6 +95,9 @@ export function dashboard(now = new Date()) {
     a.status === "error" || (["draft", "ready"].includes(a.status) && a.publish_at && Date.parse(a.publish_at) > now));
   const drafts = upcoming.filter((a) => a.status === "draft");
   if (drafts.length) suggestions.push(`確認待ちの下書きが ${drafts.length} 本あります。「公開OK」にしないと予約日に公開されません。`);
+  for (const a of articles.filter((x) => x.status === "draft" && x.error)) {
+    suggestions.push(`「${a.title}」は${a.error}。直して公開予定日を入れ「公開OK」にするか、削除してください（放っておいても次の記事は自動で作られます）。`);
+  }
 
   return {
     month,

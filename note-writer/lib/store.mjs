@@ -13,11 +13,12 @@ export const DEFAULT_SETTINGS = {
   goalMonthly: 10000,
   // note の手数料率の概算（実際の率は note の規約で確認して設定）
   feeRate: 0.15,
-  autoGenerate: false,
-  // true にすると生成した記事を確認なしで公開予約する
-  autoApprove: false,
+  autoGenerate: true,
+  // true なら、自動チェックに通った記事を人の確認なしで公開予約する（通らなければ下書きで止まる）
+  autoApprove: true,
   // 公開予約が何本を下回ったら次の記事を生成するか
   bufferSize: 3,
+  dailyGenerateLimit: 2,
   minIntervalHours: 3,
 };
 

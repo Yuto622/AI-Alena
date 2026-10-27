@@ -117,7 +117,8 @@
       <label><small>公開スケジュール（例：1 20:00, 3 20:00, 5 20:00　曜日は 0=日〜6=土、日本時間）</small><input id="sSchedule"></label>
       <div class="row" style="margin-top:8px">
         <label><input type="checkbox" id="sAutoGen" style="width:auto"> 記事を自動で生成する</label>
-        <label><input type="checkbox" id="sAutoApprove" style="width:auto"> 生成した記事を確認なしで公開OKにする</label>
+        <label><input type="checkbox" id="sAutoApprove" style="width:auto"> 自動チェックに通った記事は、人の確認なしで公開OKにする</label>
+        <label><small>1日に生成する上限（本）</small><input id="sDaily" type="number" min="0"></label>
       </div>
       <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
       <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
@@ -240,11 +241,12 @@ async function loadSettings() {
   $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
   $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
+  $("sDaily").value = s.dailyGenerateLimit;
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
   await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
-    bufferSize:Number($("sBuffer").value), schedule, autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
+    bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule, autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
   toast("保存しました"); load();
 }
 

@@ -2,7 +2,7 @@
 title: 海外大学の「持ち込み可」試験で点を取るチートシートの作り方
 price: 500
 tags: [海外大学, 留学, 試験対策, 理系, 勉強法]
-status: draft
+status: ready
 publish_at: 2026-10-28T11:00:00.000Z
 topic: cheatsheet
 ---

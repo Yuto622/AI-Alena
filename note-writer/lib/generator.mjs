@@ -85,3 +85,83 @@ ${topic.notes ? `メモ：${topic.notes}\n` : ""}${topic.tags?.length ? `入れ�
   const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   return validate(text, topic);
 }
+
+// JSON の形を指定して答えさせる（短い判定・一覧づくり用）
+async function askJson(prompt, schema) {
+  const client = new Anthropic();
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    output_config: { effort: "medium", format: { type: "json_schema", schema } },
+    messages: [{ role: "user", content: prompt }],
+  });
+  if (message.stop_reason === "refusal") throw new Error("判定を断られました");
+  if (message.stop_reason === "max_tokens") throw new Error("判定の出力が途中で切れました");
+  return JSON.parse(message.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+}
+
+// 人の確認の代わりに、公開前に別の目で読ませる。問題があれば公開しない
+export async function reviewArticle(meta, body) {
+  const profile = readIfExists(paths.profile) || "（未入力。筆者の経験として書いてよいことはない）";
+  return askJson(`次の note 記事を、公開してよいか判定してください。
+
+## 筆者について（筆者の経験として書いてよいのはここにあることだけ）
+${profile}
+
+## 公開してはいけない条件
+- 筆者の経験・実績・数字として、上の「筆者について」にないことを書いている（一般論としての説明は問題ない）
+- 事実として明らかに間違っていることを断定している
+- 大学の課題の答えをそのまま写せる内容、不正行為をすすめる内容
+- 他の人や学校をおとしめる内容、個人を特定できる情報
+- 有料部分に、価格に見合う具体的な中身（手順・テンプレート・チェックリスト）がない
+
+## 記事
+タイトル：${meta.title}
+価格：${meta.price}円
+
+${body}`, {
+    type: "object",
+    properties: {
+      ok: { type: "boolean" },
+      problems: { type: "array", items: { type: "string" } },
+    },
+    required: ["ok", "problems"],
+    additionalProperties: false,
+  });
+}
+
+// ネタ帳が空になったら、売れたテーマに近い新しいテーマを考えさせる
+export async function suggestTopics({ existing, bestTags, count = 6 }) {
+  const profile = readIfExists(paths.profile) || "（未入力）";
+  const { topics } = await askJson(`note に載せる記事のテーマを ${count} 個考えてください。
+
+## 筆者について
+${profile}
+
+## 条件
+- 読者は、海外大学に通う・目指す日本人の学生と保護者
+- 有料（500円か980円）と無料（0円）を 2:1 くらいで混ぜる。有料は「そのまま使える手順やテンプレート」が書けるテーマにする
+- 筆者の経験がなくても、一般的な方法として正確に書けるテーマにする
+- 次のテーマと重ならないこと：${existing.join(" / ")}
+${bestTags.length ? `- よく売れているタグ：${bestTags.join("、")}。このタグに近いテーマを多めに\n` : ""}`, {
+    type: "object",
+    properties: {
+      topics: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            price: { type: "integer" },
+            tags: { type: "array", items: { type: "string" } },
+          },
+          required: ["title", "price", "tags"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["topics"],
+    additionalProperties: false,
+  });
+  return topics;
+}
