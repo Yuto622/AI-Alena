@@ -5,6 +5,7 @@ import { listArticles, loadArticle, updateArticleMeta, writeArticleSource, readA
 import { getApps, chooseApp } from "./apps.mjs";
 import { updateLearnings } from "./learning.mjs";
 import { importStatsDaily } from "./stats.mjs";
+import { shouldScoutTrends, scoutTrends } from "./trends.mjs";
 import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./x.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -124,10 +125,15 @@ export async function tick(now = new Date()) {
       const r = await publishArticle(due.name);
       report.published = { name: due.name, url: r.url };
     } catch (e) {
-      // 失敗のたびに note 側へ下書きが増えないよう、人が確認するまで再実行しない
-      const msg = e.message.replace(/\u001b\[\d+m/g, "").split("\n")[0];
-      updateArticleMeta(due.name, { status: "error", error: msg });
-      report.errors.push(`公開失敗 ${due.name}: ${msg}`);
+      if (e.code === "TOO_SOON") {
+        // 前の公開から間がないだけ。次の実行でもう一度試す
+        report.waiting = { name: due.name, reason: e.message };
+      } else {
+        // 失敗のたびに note 側へ下書きが増えないよう、人が確認するまで再実行しない
+        const msg = e.message.replace(/\u001b\[\d+m/g, "").split("\n")[0];
+        updateArticleMeta(due.name, { status: "error", error: msg });
+        report.errors.push(`公開失敗 ${due.name}: ${msg}`);
+      }
     }
   }
   const settings = getSettings();
@@ -143,6 +149,14 @@ export async function tick(now = new Date()) {
       } catch (e) {
         report.errors.push(`生成失敗: ${e.message}`);
       }
+    }
+  }
+  // 話題枠：朝に1回、note の急上昇・注目キーワードから、英語・海外につなげられる話題を探して書く（週の上限あり）
+  if (settings.trendEnabled && shouldScoutTrends(now)) {
+    try {
+      report.trend = await scoutTrends(now);
+    } catch (e) {
+      report.errors.push(`話題枠の失敗: ${e.message.split("\n")[0]}`);
     }
   }
   // 1日1回、note のダッシュボードから閲覧数・販売数を取り込む

@@ -37,3 +37,4 @@ note-writer/credentials.enc.json
 note-writer/x-log.json
 note-writer/secrets.enc.json
 note-writer/stats-import.json
+note-writer/trends.json

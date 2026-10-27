@@ -24,6 +24,11 @@ export const DEFAULT_SETTINGS = {
   headerImage: true,
   // 1日1回、note のダッシュボードから閲覧数・販売数を取り込む
   statsImport: true,
+  // 話題枠：週に何本まで／日本時間の何時以降に探すか／何時に公開するか（通常枠の20時と3時間以上あける）
+  trendEnabled: true,
+  trendPerWeek: 1,
+  trendScoutHour: 8,
+  trendPublishHour: 12,
   // X：公開したら紹介する／1日1回、過去の記事をもう一度紹介する（日本時間の何時以降か）
   xOnPublish: true,
   xDailyPromo: true,

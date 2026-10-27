@@ -106,7 +106,7 @@ export async function askJson(prompt, schema) {
 }
 
 // 人の確認の代わりに、公開前に別の目で読ませる。問題があれば公開しない
-export async function reviewArticle(meta, body) {
+export async function reviewArticle(meta, body, { extra = "" } = {}) {
   const profile = readIfExists(paths.profile) || "（未入力。筆者の経験として書いてよいことはない）";
   return askJson(`次の note 記事を、公開してよいか判定してください。
 
@@ -119,7 +119,7 @@ ${profile}
 - 大学の課題の答えをそのまま写せる内容、不正行為をすすめる内容
 - 他の人や学校をおとしめる内容、個人を特定できる情報
 - 有料部分に、価格に見合う具体的な中身（手順・テンプレート・チェックリスト）がない
-
+${extra}
 ## 記事
 タイトル：${meta.title}
 価格：${meta.price}円

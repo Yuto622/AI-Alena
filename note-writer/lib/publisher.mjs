@@ -201,7 +201,8 @@ export function assertPublishable(article, { force = false } = {}) {
   const last = log.filter((e) => !e.draft && (e.account || "default") === article.account).at(-1);
   const hours = last ? (Date.now() - Date.parse(last.at)) / 36e5 : Infinity;
   if (hours < minHours && !force) {
-    throw new Error(`前回の公開から ${hours.toFixed(1)} 時間です（${minHours} 時間以上空けてください）`);
+    // 間隔が足りないだけなら失敗ではないので、呼び出し側で「あとで公開」として扱えるよう印を付ける
+    throw Object.assign(new Error(`前回の公開から ${hours.toFixed(1)} 時間です（${minHours} 時間以上空けてください）`), { code: "TOO_SOON" });
   }
 }
 

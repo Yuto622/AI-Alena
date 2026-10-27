@@ -48,6 +48,7 @@
     <button data-tab="dash" class="on">ダッシュボード</button>
     <button data-tab="articles">記事</button>
     <button data-tab="topics">ネタ帳</button>
+    <button data-tab="trends">話題枠</button>
     <button data-tab="apps">アプリ</button>
     <button data-tab="xtab">X</button>
     <button data-tab="logs">実行ログ</button>
@@ -104,6 +105,14 @@
         <input id="tTags" placeholder="タグ（カンマ区切り）"><input id="tNotes" placeholder="メモ（実体験など）">
       </div>
       <div class="actions"><button class="btn" onclick="addTopic()">＋ 追加</button></div>
+    </div>
+  </section>
+
+  <section id="trends">
+    <div class="card"><h3>話題枠（バズ枠）</h3>
+      <p><small>毎朝、note の「急上昇」「注目キーワード」を読み、英語・海外・英語学習に自然につなげられる話題があれば「話題 × 英語」の無料記事を書いて、その日の昼に公開します。つながる話題がなければ書きません。週の本数と時刻は「設定」で変えられます。</small></p>
+      <div class="actions" style="margin:0 0 8px"><button class="btn" onclick="act('/api/trends/scout', {}, '話題探し')">今すぐ話題を探す</button></div>
+      <div class="scroll"><table id="trendLog"></table></div>
     </div>
   </section>
 
@@ -202,6 +211,10 @@
         <label><input type="checkbox" id="sHeader" style="width:auto"> 見出し画像を自動で作って載せる（費用0円）</label>
         <label><small>見出し画像の下に入れる一言</small><input id="sFooter"></label>
         <label><small>アプリを試しに選ぶ割合（0〜1）</small><input id="sExplore" type="number" step="0.05" min="0" max="1"></label>
+        <label><input type="checkbox" id="sTrend" style="width:auto"> 話題枠（その日の話題 × 英語の記事）を書く</label>
+        <label><small>話題枠：週に何本まで</small><input id="sTrendWeek" type="number" min="0" max="7"></label>
+        <label><small>話題枠：探す時刻（日本時間の何時以降）</small><input id="sTrendScout" type="number" min="0" max="23"></label>
+        <label><small>話題枠：公開する時刻（通常の公開と3時間以上あける）</small><input id="sTrendPub" type="number" min="0" max="23"></label>
         <label><input type="checkbox" id="sStats" style="width:auto"> 毎日 note から閲覧数・販売数を取り込む</label>
         <label><input type="checkbox" id="sXPub" style="width:auto"> 公開したら X で紹介する</label>
         <label><input type="checkbox" id="sXDaily" style="width:auto"> 1日1回、過去の記事を X で再紹介する</label>
@@ -334,6 +347,15 @@ async function removeApp(id) {
   await api("/api/apps", "PUT", apps.filter((a) => a.id !== id)); loadApps();
 }
 
+async function loadTrends() {
+  const log = await api("/api/trends");
+  $("trendLog").innerHTML = "<tr><th>日時</th><th>結果</th><th>話題と切り口</th><th>理由</th></tr>" + log.map((l) => {
+    const result = l.error ? `失敗：${esc(l.error)}` : l.skipped ? "見送り" : l.article
+      ? `<a href="#" onclick="openArticle('${esc(l.article)}');return false">${l.approved ? "公開予約" : "下書きで停止"}</a>` : "-";
+    return `<tr><td>${jst(l.at)}</td><td>${result}</td><td>${esc(l.keyword || "")}<br><small>${esc(l.angle || "")}</small></td>
+      <td><small>${esc(l.reason || "")}${l.problems?.length ? "<br>止めた理由：" + esc(l.problems.join(" / ")) : ""}</small></td></tr>`;
+  }).join("") || "<tr><td>まだ探していません。</td></tr>";
+}
 async function loadX() {
   const d = await api("/api/x");
   $("xStatus").innerHTML = d.hasKeys ? "<b>キー設定済み</b>" : "<b>まだキーが設定されていません。</b>下で入れると自動投稿が始まります。";
@@ -415,12 +437,15 @@ async function loadSettings() {
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
   $("sDaily").value = s.dailyGenerateLimit;
   $("sHeader").checked = s.headerImage; $("sFooter").value = s.thumbnailFooter; $("sExplore").value = s.exploreRate;
+  $("sTrend").checked = s.trendEnabled; $("sTrendWeek").value = s.trendPerWeek; $("sTrendScout").value = s.trendScoutHour; $("sTrendPub").value = s.trendPublishHour;
   $("sStats").checked = s.statsImport; $("sXPub").checked = s.xOnPublish; $("sXDaily").checked = s.xDailyPromo; $("sXHour").value = s.xDailyHour;
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
   await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
     bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule,
+    trendEnabled:$("sTrend").checked, trendPerWeek:Number($("sTrendWeek").value) || 0,
+    trendScoutHour:Math.min(23, Math.max(0, Number($("sTrendScout").value) || 0)), trendPublishHour:Math.min(23, Math.max(0, Number($("sTrendPub").value) || 0)),
     statsImport:$("sStats").checked, xOnPublish:$("sXPub").checked, xDailyPromo:$("sXDaily").checked,
     xDailyHour:Math.min(23, Math.max(0, Number($("sXHour").value) || 0)),
     headerImage:$("sHeader").checked, thumbnailFooter:$("sFooter").value, exploreRate:Math.min(1, Math.max(0, Number($("sExplore").value) || 0)), autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
@@ -429,7 +454,7 @@ async function saveSettings() {
 
 function load() {
   // 読み込みの失敗を画面に出す（何も出ないと原因がわからないため）
-  for (const [label, fn] of [["ダッシュボード", loadDash], ["取り込み状況", loadImportInfo], ["記事", loadArticles], ["ネタ帳", loadTopics], ["アプリ", loadApps], ["X", loadX], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
+  for (const [label, fn] of [["ダッシュボード", loadDash], ["取り込み状況", loadImportInfo], ["記事", loadArticles], ["ネタ帳", loadTopics], ["話題枠", loadTrends], ["アプリ", loadApps], ["X", loadX], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
     fn().catch((e) => toast(`${label}の読み込みに失敗：${e.message}`, 12000));
   }
 }

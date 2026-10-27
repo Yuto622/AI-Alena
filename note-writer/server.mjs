@@ -13,6 +13,7 @@ import { getApps, saveApps, recordClick } from "./lib/apps.mjs";
 import { appPerformance, getLearnings, updateLearnings } from "./lib/learning.mjs";
 import { renderThumbnail } from "./lib/thumbnail.mjs";
 import { importStats, lastImport } from "./lib/stats.mjs";
+import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { createRequire } from "module";
 import {
@@ -104,6 +105,13 @@ app.post("/api/import-stats", wrap(async () => {
   return { ...r, shots: r.shots && path.relative(paths.out, r.shots) };
 }));
 app.get("/api/import-stats", wrap(() => lastImport()));
+
+app.get("/api/trends", wrap(() => getTrendLog().slice(-20).reverse()));
+// 管理画面から：週の上限や時刻に関係なく、今すぐ話題を探す
+app.post("/api/trends/scout", wrap(async () => {
+  const r = await scoutTrends(new Date());
+  return r;
+}));
 
 app.get("/api/x", wrap(() => ({ hasKeys: hasXKeys(), log: getXLog().slice(-30).reverse() })));
 app.put("/api/x/keys", wrap((req) => {
