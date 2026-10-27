@@ -24,9 +24,9 @@ export function appPerformance() {
   });
 }
 
-// 何割かは「まだ試していないアプリ」を選んでデータを集め、残りは実績と内容から選ぶ
-export function exploreChoice(rng = Math.random) {
-  const perf = appPerformance();
+// 何割かは、候補（記事に合うもの）の中から載せた回数の少ないものを選んでデータを集める
+export function exploreChoice(candidates, rng = Math.random) {
+  const perf = appPerformance().filter((p) => candidates.includes(p.id));
   if (perf.length < 2 || rng() >= getSettings().exploreRate) return null;
   return perf.sort((a, b) => a.exposures - b.exposures)[0].id;
 }

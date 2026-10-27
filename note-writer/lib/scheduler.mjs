@@ -35,12 +35,20 @@ export function nextFreeSlot(articles = listArticles()) {
   throw new Error("空いている公開枠がありません（設定の公開スケジュールを確認）");
 }
 
+// 記事に書き込む app の値：選んだ id ／ 合うものがなければ "none" ／ アプリ未登録・AI に聞けなかったら空（公開前に選び直す）
+async function appForMeta(article) {
+  if (getApps().length === 0) return "";
+  const app = await chooseApp(article);
+  return app === undefined ? "" : app || "none";
+}
+
 // アプリが登録されていて、記事にまだ選ばれていなければ選んでおく
 async function ensureApp(name) {
   const { meta, body } = readArticleSource(name);
   if (meta.app || getApps().length === 0) return;
   const app = await chooseApp({ title: meta.title, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags], body });
-  if (app) updateArticleMeta(name, { app });
+  // 合うものがなければ "none" を記録して、毎回聞き直さない（AI に聞けなかったときは何もしない）
+  if (app !== undefined) updateArticleMeta(name, { app: app || "none" });
 }
 
 export async function publishArticle(name, { mode = "publish", force = false } = {}) {
@@ -99,7 +107,7 @@ export async function generateNext(topicId) {
     // 自動チェックで止めた記事は枠を空けておく（次の記事がその枠に入れるように）
     publish_at: review.ok ? slot.toISOString() : "",
     topic: topic.id,
-    app: (await chooseApp({ title: meta.title, tags: meta.tags || [], body })) || "",
+    app: await appForMeta({ title: meta.title, tags: meta.tags || [], body }),
     error: review.ok ? "" : `自動チェックで止めました：${review.problems.join(" / ")}`,
   }, body);
   const writtenAt = new Date().toISOString();

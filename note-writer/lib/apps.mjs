@@ -32,21 +32,20 @@ export function clickStats() {
   return stats;
 }
 
-// 記事の内容に一番合うアプリを選ぶ。選べなければ一覧の先頭
+// 記事の内容に合うアプリを選ぶ。
+// 返り値：アプリの id ／ null（合うものがない＝紹介しない）／ undefined（AI に聞けなかった＝あとでやり直す）
 export async function chooseApp({ title, tags, body }) {
   const apps = getApps();
-  if (apps.length <= 1) return apps[0]?.id || null;
+  if (apps.length === 0) return null;
   try {
     // article.mjs → apps.mjs → generator.mjs → article.mjs の循環を避けるため、使うときに読み込む
     const { askJson } = await import("./generator.mjs");
     const { exploreChoice, appPerformance, getLearnings } = await import("./learning.mjs");
-    // 一定の割合で、まだ載せた回数の少ないアプリを試してデータを集める
-    const explore = exploreChoice();
-    if (explore) return explore;
     const perf = Object.fromEntries(appPerformance().map((p) => [p.id, p]));
-    const { appId } = await askJson(`note 記事の最後で紹介するスマホアプリを1つ選んでください。
-記事を読み終えた人が「今すぐ入れたい」と思うもの、つまり記事の悩みや目的に一番近いアプリを選びます。
-内容の合い方が同じくらいなら、「記事1本あたりのクリック数」が多いものを選びます。
+    const { suitable, best } = await askJson(`note 記事の最後で紹介する商品を選んでください。
+1. まず、記事の読者に「合う」ものをすべて挙げる（suitable）。読者の悩みや目的と関係が薄いものは入れない。合うものがなければ空にする
+2. その中から一番合うものを1つ選ぶ（best）。内容の合い方が同じくらいなら「記事1本あたりのクリック数」が多いもの。合うものがなければ "none"
+- 種類が「法人向け」の商品は、個人では申し込めない。記事の読者に、英語教室・学習塾の経営者や先生、または子どもの英語に関心のある保護者がいる場合だけ「合う」とする
 
 ## これまでの学び
 ${getLearnings() || "（まだデータがありません）"}
@@ -56,21 +55,28 @@ ${getLearnings() || "（まだデータがありません）"}
 タグ：${(tags || []).join(", ")}
 冒頭：${body.slice(0, 1500)}
 
-## アプリ
+## 商品
 ${apps.map((a) => `- id: ${a.id}
   名前：${a.name}
+  種類：${a.kind === "business" ? "法人向け（教室が契約する）" : "個人向けアプリ"}
   内容：${a.description || ""}
   向いている人：${a.audience || ""}
   載せた記事：${perf[a.id]?.exposures || 0}本、記事1本あたりのクリック：${perf[a.id]?.perArticle?.toFixed(2) ?? "まだなし"}`).join("\n")}`, {
       type: "object",
-      properties: { appId: { type: "string", enum: apps.map((a) => a.id) } },
-      required: ["appId"],
+      properties: {
+        suitable: { type: "array", items: { type: "string", enum: apps.map((a) => a.id) } },
+        best: { type: "string", enum: [...apps.map((a) => a.id), "none"] },
+      },
+      required: ["suitable", "best"],
       additionalProperties: false,
     });
-    return appId;
+    const ok = [...new Set(suitable)].filter((id) => apps.some((a) => a.id === id));
+    if (best === "none" || ok.length === 0) return null;
+    // 一定の割合で、合うものの中から、まだ載せた回数の少ないものを試してデータを集める
+    return exploreChoice(ok) || (ok.includes(best) ? best : ok[0]);
   } catch (e) {
-    console.error(`アプリの自動選択に失敗：${e.message}`);
-    return apps[0].id;
+    console.error(`商品の自動選択に失敗：${e.message}`);
+    return undefined;
   }
 }
 
@@ -80,6 +86,18 @@ export function appCtaMarkdown(appId, articleName) {
   if (!app) return "";
   const base = process.env.PUBLIC_URL;
   const link = base ? `${base}/go/${app.id}?a=${encodeURIComponent(articleName)}` : app.url;
+  if (app.kind === "business") {
+    // 法人向け：教室には説明の予約へ、保護者には「通っている教室に伝えてもらう」（教室を飛ばして売らない）
+    return `---
+
+## 「${app.name}」について
+
+${app.pitch || app.description || ""}
+
+- **英語教室・学習塾の方へ**：▶ [無料のオンライン説明を予約する](${link})
+- **保護者の方へ**：教室単位で導入する教材です。気になったら、お子さんの通う英語教室の先生に伝えてみてください。
+`;
+  }
   return `---
 
 ## 英語学習アプリ「${app.name}」

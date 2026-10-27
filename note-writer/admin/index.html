@@ -108,12 +108,17 @@
   </section>
 
   <section id="apps">
-    <div class="card"><h3>紹介するアプリ</h3>
-      <p><small>記事ごとに、内容に一番合うアプリを AI が選んで記事の最後で紹介します。2割の記事では、まだ載せた回数の少ないアプリを試してデータを集めます。リンクは自分のサーバーを経由させて、クリックを数えます。</small></p>
+    <div class="card"><h3>紹介するアプリ・商品</h3>
+      <p><small>記事ごとに、読者に合うものを AI が選んで記事の最後で紹介します。合うものがなければ何も付けません。合うものが複数あるときは、2割の記事で載せた回数の少ないものを試してデータを集めます。リンクは自分のサーバーを経由させて、クリックを数えます。<br>
+      「法人向け」は、教室の方には説明の予約へ、保護者の方には「通っている教室の先生に伝えてください」と案内します（教室を飛ばして売りません）。</small></p>
       <div class="scroll"><table id="appList"></table></div>
       <div class="row" style="margin-top:12px">
-        <label><small>アプリ名</small><input id="apName"></label>
-        <label><small>URL（App Store / Google Play）</small><input id="apUrl" placeholder="https://"></label>
+        <label><small>名前</small><input id="apName"></label>
+        <label><small>種類</small><select id="apKind">
+          <option value="app">個人向けアプリ（スマホに入れてもらう）</option>
+          <option value="business">法人向け（教室が契約する。U-Speak Roblox など）</option>
+        </select></label>
+        <label><small>URL（アプリのページ／法人向けは説明の予約ページ）</small><input id="apUrl" placeholder="https://"></label>
       </div>
       <div class="row">
         <label><small>どんなアプリか（AI が選ぶときに読む）</small><input id="apDesc" placeholder="例：シャドーイングと発音記号を毎日5分で練習できる"></label>
@@ -308,13 +313,13 @@ async function loadApps() {
   const perf = Object.fromEntries(d.performance.map((p) => [p.id, p]));
   $("appList").innerHTML = "<tr><th>アプリ</th><th>どんなアプリか</th><th>載せた記事</th><th>クリック</th><th>1本あたり</th><th></th></tr>" + apps.map((a) => {
     const p = perf[a.id] || {};
-    return `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.name)}</a></td><td>${esc(a.description || "")}</td><td>${p.exposures ?? 0}</td><td>${p.clicks ?? 0}</td>
+    return `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.name)}</a><br><small>${a.kind === "business" ? "法人向け" : "個人向けアプリ"}</small></td><td>${esc(a.description || "")}</td><td>${p.exposures ?? 0}</td><td>${p.clicks ?? 0}</td>
       <td>${p.perArticle == null ? "-" : p.perArticle.toFixed(2)}</td><td><button class="btn" onclick="removeApp('${esc(a.id)}')">削除</button></td></tr>`;
   }).join("");
   $("learnings").textContent = d.learnings || "公開した記事が3本たまると、毎週ここに学びがまとまり、記事づくり・テーマ選び・アプリ選びに使われます。";
 }
 async function addApp() {
-  const next = [...apps, { id:Date.now().toString(36), name:$("apName").value.trim(), url:$("apUrl").value.trim(),
+  const next = [...apps, { id:Date.now().toString(36), name:$("apName").value.trim(), url:$("apUrl").value.trim(), kind:$("apKind").value,
     description:$("apDesc").value.trim(), audience:$("apAud").value.trim(), pitch:$("apPitch").value.trim() }];
   try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch"].forEach((id) => $(id).value = ""); toast("追加しました"); loadApps(); }
   catch (e) { toast(`追加できません：${e.message}`, 8000); }
