@@ -32,7 +32,7 @@ bash note-writer/deploy.sh <GCPプロジェクトID>
 | Cloud Scheduler | 1ジョブ（毎時5分） | 無料（3ジョブまで） |
 | Secret Manager | 5件 | 無料（6件まで） |
 | Artifact Registry | 最新のイメージ1つだけ残す | 数十円/月 |
-| Claude API | 記事1本ごと | 使った分だけ（固定費ではない） |
+| Claude API | Claude Haiku 5.5（一番安いモデル）。記事1本あたり1円前後 | 使った分だけ（固定費ではない） |
 
 無料枠の条件は Google Cloud の料金ページで確認すること。
 

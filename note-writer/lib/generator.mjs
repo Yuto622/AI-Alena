@@ -5,7 +5,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { paths } from "./config.mjs";
 import { parseFrontmatter, PAID_MARKER, markdownToBlocks } from "./article.mjs";
 
-const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
+// 一番安いモデル。品質を上げたいときは CLAUDE_MODEL=claude-sonnet-5-5 などに変える
+const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-5-5";
 
 function readIfExists(file) {
   return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
@@ -68,12 +69,10 @@ export async function generateArticle(topic) {
 テーマ：${topic.title}
 ${topic.notes ? `メモ：${topic.notes}\n` : ""}${topic.tags?.length ? `入れたいタグ：${topic.tags.join(", ")}\n` : ""}`;
 
-  const stream = client.beta.messages.stream({
+  const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 32000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "high" },
+    output_config: { effort: "medium" },
     system: [{ type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userMessage }],
   });
