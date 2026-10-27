@@ -46,6 +46,7 @@ export async function chooseApp({ title, tags, body }) {
     const { suitable, best } = await askJson(`note 記事の最後で紹介する商品を選んでください。
 1. まず、記事の読者に「合う」ものをすべて挙げる（suitable）。読者の悩みや目的と関係が薄いものは入れない。合うものがなければ空にする
 2. その中から一番合うものを1つ選ぶ（best）。内容の合い方が同じくらいなら「記事1本あたりのクリック数」が多いもの。合うものがなければ "none"
+- 種類が「個人向けの有料サービス」のものは、内容に書かれたテーマ（例：編入・留学・英語の勉強法）を扱う記事で、読者が自分で申し込める人の場合だけ「合う」とする
 - 種類が「法人向け」の商品は、個人では申し込めない。記事の読者に、英語教室・学習塾の経営者や先生、または子どもの英語に関心のある保護者がいる場合だけ「合う」とする
 
 ## これまでの学び
@@ -59,7 +60,7 @@ ${getLearnings() || "（まだデータがありません）"}
 ## 商品
 ${apps.map((a) => `- id: ${a.id}
   名前：${a.name}
-  種類：${a.kind === "business" ? "法人向け（教室が契約する）" : "個人向けアプリ"}
+  種類：${a.kind === "business" ? "法人向け（教室が契約する）" : a.kind === "service" ? "個人向けの有料サービス（相談など）" : "個人向けアプリ"}
   内容：${a.description || ""}
   向いている人：${a.audience || ""}
   載せた記事：${perf[a.id]?.exposures || 0}本、記事1本あたりのクリック：${perf[a.id]?.perArticle?.toFixed(2) ?? "まだなし"}`).join("\n")}`, {
@@ -90,6 +91,17 @@ export function appCtaMarkdown(appId, articleName) {
   const link = base ? track() : app.url;
   const site = app.siteUrl ? (base ? track("site") : app.siteUrl) : "";
   const siteLine = site ? `\n運営：${app.company || app.name}（[ホームページ](${site})）\n` : "";
+  if (app.kind === "service") {
+    // 個人向けの有料サービス（相談など）：支払いページへ。予約ページは支払ったあとに案内する
+    return `---
+
+## ${app.name}
+
+${app.pitch || app.description || ""}
+
+**▶ [申し込む（お支払いのあと、日時を選べます）](${link})**
+${app.fineprint ? `\n※${app.fineprint}\n` : ""}${siteLine}`;
+  }
   if (app.kind === "business") {
     // 法人向け：教室には説明の予約へ、保護者には「通っている教室に伝えてもらう」（教室を飛ばして売らない）
     return `---
