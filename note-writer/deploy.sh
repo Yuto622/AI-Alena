@@ -115,9 +115,9 @@ CRON_TOKEN="$(gcloud secrets versions access latest --secret=CRON_TOKEN)"
 JOB_ARGS=(--location "$REGION" --schedule "5 * * * *" --time-zone "Asia/Tokyo"
   --uri "$URL/cron/tick" --http-method POST --headers "x-cron-token=$CRON_TOKEN" --attempt-deadline 900s)
 if gcloud scheduler jobs describe note-writer-tick --location "$REGION" >/dev/null 2>&1; then
-  gcloud scheduler jobs update http note-writer-tick "${JOB_ARGS[@]}"
+  gcloud scheduler jobs update http note-writer-tick "${JOB_ARGS[@]}" >/dev/null
 else
-  gcloud scheduler jobs create http note-writer-tick "${JOB_ARGS[@]}"
+  gcloud scheduler jobs create http note-writer-tick "${JOB_ARGS[@]}" >/dev/null
 fi
 
 # 古いイメージを自動で消す（最新1つだけ残す）
@@ -135,4 +135,4 @@ rm -f "$POLICY"
 echo
 echo "✅ デプロイ完了"
 echo "管理画面: $URL  （ユーザー名 admin）"
-echo "最初に管理画面の「設定」→「note のログイン情報」で、メールアドレスとパスワードを入れてください。"
+echo "最初に管理画面の「設定」で、note のログイン状態（cookie）を貼ってください。"
