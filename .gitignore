@@ -26,3 +26,7 @@ dist-ssr
 # note-writer
 note-writer/.auth/
 note-writer/out/
+note-writer/node_modules/
+note-writer/published*.json
+note-writer/sales.json
+note-writer/settings.json

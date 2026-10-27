@@ -1,0 +1,14 @@
+[
+  { "id": "cheatsheet", "title": "持ち込み可の試験で点を取るチートシートの作り方", "price": 500, "tags": ["海外大学", "試験対策", "勉強法"], "status": "written", "article": "2026-10-26-cheatsheet.md" },
+  { "id": "lecture-review", "title": "英語が第二言語でも講義についていく予習・復習の型", "price": 500, "tags": ["海外大学", "勉強法", "英語"], "status": "written", "article": "2026-10-30-lecture-review.md" },
+  { "id": "professor-email", "title": "海外大学の教授へのメールの書き方（テンプレ付き）", "price": 0, "tags": ["海外大学", "英語メール"], "status": "written", "article": "2026-10-28-professor-email.md" },
+  { "id": "office-hours", "title": "Office Hours の使い方：質問の準備から聞き方まで", "price": 500, "tags": ["海外大学", "勉強法", "英語"], "status": "todo" },
+  { "id": "study-questions", "title": "Study Questions を使った最短の試験対策", "price": 500, "tags": ["海外大学", "試験対策", "勉強法"], "status": "todo" },
+  { "id": "gpa", "title": "アメリカの大学の成績のしくみ（GPA・カーブ・Letter Grade）", "price": 0, "tags": ["海外大学", "留学"], "status": "todo" },
+  { "id": "research-lab", "title": "学部生が教授の研究室に入るまでの流れとメール文面", "price": 980, "tags": ["海外大学", "研究", "英語メール"], "status": "todo" },
+  { "id": "english-report", "title": "英語のレポートを書くときの型（Reading Response など）", "price": 500, "tags": ["海外大学", "英語", "レポート"], "status": "todo" },
+  { "id": "weekly-schedule", "title": "海外大学の1週間のスケジュール（授業・課題・試験）", "price": 0, "tags": ["海外大学", "留学"], "status": "todo" },
+  { "id": "exam-plan", "title": "理系の Midterm / Final 2週間前からの計画表", "price": 500, "tags": ["海外大学", "試験対策", "理系"], "status": "todo" },
+  { "id": "jp-vs-us", "title": "日本の大学と比べた授業の進み方の違いと対策", "price": 500, "tags": ["海外大学", "留学", "勉強法"], "status": "todo" },
+  { "id": "before-abroad", "title": "留学前にやっておけばよかったこと", "price": 0, "tags": ["海外大学", "留学"], "status": "todo" }
+]

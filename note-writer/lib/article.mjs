@@ -1,12 +1,12 @@
 // 記事ファイル（Markdown + 先頭のメタ情報）を読み込み、note に貼れる HTML に変換する
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { paths } from "./config.mjs";
 
-const PAID_MARKER = "<!-- paid -->";
+export const PAID_MARKER = "<!-- paid -->";
 
 // 先頭の --- で囲まれた key: value を読む（依存ライブラリなしの簡易版）
-function parseFrontmatter(src) {
+export function parseFrontmatter(src) {
   const m = src.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!m) throw new Error("記事の先頭に --- で囲んだメタ情報がありません");
   const meta = {};
@@ -72,6 +72,60 @@ export function markdownToBlocks(md) {
   return blocks;
 }
 
+const FRONTMATTER_KEYS = ["title", "price", "tags", "status", "account", "cta", "publish_at", "url", "topic", "error"];
+
+export function serializeArticle(meta, body) {
+  const lines = FRONTMATTER_KEYS.filter((k) => meta[k] !== undefined && meta[k] !== "").map((k) => {
+    const v = meta[k];
+    return `${k}: ${Array.isArray(v) ? `[${v.join(", ")}]` : String(v).replace(/\n/g, " ")}`;
+  });
+  return `---\n${lines.join("\n")}\n---\n\n${body.replace(/^\n+/, "")}`;
+}
+
+// 管理画面から触る記事はファイル名で指定する。パスの外に出られないよう名前を制限する
+export function articlePath(name) {
+  if (!/^[\w.-]+\.md$/.test(name) || name.startsWith("_")) throw new Error(`不正な記事名: ${name}`);
+  return path.join(paths.articles, name);
+}
+
+export function readArticleSource(name) {
+  return parseFrontmatter(fs.readFileSync(articlePath(name), "utf8"));
+}
+
+export function writeArticleSource(name, meta, body) {
+  fs.mkdirSync(paths.articles, { recursive: true });
+  fs.writeFileSync(articlePath(name), serializeArticle(meta, body));
+}
+
+export function updateArticleMeta(name, patch) {
+  const { meta, body } = readArticleSource(name);
+  writeArticleSource(name, { ...meta, ...patch }, body);
+}
+
+// 一覧（_template.md などの下線始まりは除く）
+export function listArticles() {
+  if (!fs.existsSync(paths.articles)) return [];
+  return fs.readdirSync(paths.articles)
+    .filter((f) => f.endsWith(".md") && !f.startsWith("_"))
+    .map((name) => {
+      const { meta, body } = readArticleSource(name);
+      return {
+        name,
+        title: meta.title || "",
+        price: Number(meta.price || 0),
+        tags: Array.isArray(meta.tags) ? meta.tags : meta.tags ? [meta.tags] : [],
+        status: meta.status || "draft",
+        account: meta.account || "default",
+        publish_at: meta.publish_at || "",
+        url: meta.url || "",
+        topic: meta.topic || "",
+        error: meta.error || "",
+        chars: body.length,
+      };
+    })
+    .sort((a, b) => (a.publish_at || "9999").localeCompare(b.publish_at || "9999"));
+}
+
 export function loadArticle(file) {
   const { meta, body } = parseFrontmatter(fs.readFileSync(file, "utf8"));
   if (!meta.title) throw new Error(`${file}: title がありません`);
@@ -87,7 +141,7 @@ export function loadArticle(file) {
   const paidBlocks = paid === undefined ? [] : markdownToBlocks(paid);
   // cta: uspeak のように指定すると、cta/uspeak.md を記事の最後に付ける
   if (meta.cta) {
-    const ctaFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "cta", `${meta.cta}.md`);
+    const ctaFile = path.join(paths.cta, `${meta.cta}.md`);
     const cta = fs.readFileSync(ctaFile, "utf8");
     if (cta.includes("{{")) throw new Error(`${ctaFile}: 未設定の {{...}} が残っています`);
     (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(cta));
@@ -98,6 +152,7 @@ export function loadArticle(file) {
     price,
     tags: Array.isArray(meta.tags) ? meta.tags : meta.tags ? [meta.tags] : [],
     status: meta.status || "draft",
+    account: meta.account || "default",
     html: [...freeBlocks, ...paidBlocks].join(""),
     // 有料ラインは「無料ブロックの直後」に置く
     freeBlockCount: freeBlocks.length,

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>note 管理画面</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1f2328; --muted:#6a737d; --line:#e3e3e0; --accent:#2b7a5b; --warn:#b54708; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16181b; --card:#1f2226; --ink:#e8e8e6; --muted:#9aa0a6; --line:#33373c; --accent:#5cc39a; --warn:#f0a050; --bad:#ff6b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  header { display:flex; gap:4px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; }
+  header strong { margin-right:12px; align-self:center; }
+  nav button { background:none; border:0; padding:6px 12px; border-radius:6px; color:var(--muted); cursor:pointer; font:inherit; }
+  nav button.on { background:var(--bg); color:var(--ink); font-weight:600; }
+  main { max-width:1100px; margin:0 auto; padding:16px; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; }
+  .kpi small { color:var(--muted); display:block; } .kpi b { font-size:24px; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:6px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:13px; }
+  .scroll { overflow-x:auto; }
+  .tag { display:inline-block; padding:0 8px; border-radius:10px; font-size:12px; border:1px solid var(--line); }
+  .s-ready { color:var(--accent); border-color:var(--accent); } .s-draft { color:var(--warn); border-color:var(--warn); } .s-published { color:var(--muted); } .s-error { color:var(--bad); border-color:var(--bad); }
+  button.btn { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  input, textarea, select { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; width:100%; }
+  textarea { min-height:420px; font-family:ui-monospace, monospace; font-size:13px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:8px; margin-bottom:8px; }
+  label small { color:var(--muted); display:block; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  #toast { position:fixed; bottom:16px; left:16px; right:16px; max-width:640px; margin:auto; padding:12px 16px; border-radius:8px; background:var(--ink); color:var(--bg); display:none; white-space:pre-wrap; }
+  ul.sugg li { margin-bottom:6px; }
+  .shots img { width:220px; border:1px solid var(--line); border-radius:6px; margin:4px; }
+</style>
+</head>
+<body>
+<header>
+  <strong>note 管理画面</strong>
+  <nav>
+    <button data-tab="dash" class="on">ダッシュボード</button>
+    <button data-tab="articles">記事</button>
+    <button data-tab="topics">ネタ帳</button>
+    <button data-tab="logs">実行ログ</button>
+    <button data-tab="settings">設定</button>
+  </nav>
+</header>
+<main>
+  <section id="dash" class="on">
+    <div class="kpis" id="kpis"></div>
+    <div class="card"><h3>売上を伸ばすための提案</h3><ul class="sugg" id="sugg"></ul></div>
+    <div class="card"><h3>公開予定</h3><div class="scroll"><table id="upcoming"></table></div>
+      <div class="actions"><button class="btn" onclick="act('/api/tick', {}, '予約実行')">予約実行を今すぐ動かす</button>
+      <button class="btn" onclick="act('/api/generate', {}, '次の記事を生成')">次の記事を生成</button></div></div>
+    <div class="card"><h3>記事ごとの売上（note の管理画面の数字を月ごとに入力）</h3>
+      <div class="scroll"><table id="perArticle"></table></div></div>
+  </section>
+
+  <section id="articles">
+    <div class="card"><div class="actions" style="margin:0 0 8px"><button class="btn" onclick="newArticle()">＋ 新しい記事</button></div>
+      <div class="scroll"><table id="articleList"></table></div></div>
+    <div class="card" id="editor" style="display:none">
+      <h3 id="edName"></h3>
+      <div class="row">
+        <label><small>タイトル</small><input id="edTitle"></label>
+        <label><small>価格（0 なら無料）</small><input id="edPrice" type="number" min="0"></label>
+        <label><small>状態</small><select id="edStatus"><option value="draft">下書き（確認待ち）</option><option value="ready">公開OK（予約日に公開）</option><option value="published">公開済み</option><option value="error">失敗（要確認）</option></select></label>
+      </div>
+      <div class="row">
+        <label><small>タグ（カンマ区切り）</small><input id="edTags"></label>
+        <label><small>公開予定（日本時間）</small><input id="edAt" type="datetime-local"></label>
+        <label><small>アカウント</small><input id="edAccount" placeholder="default"></label>
+        <label><small>末尾の案内（cta/ のファイル名）</small><input id="edCta" placeholder="なし"></label>
+      </div>
+      <label><small>本文（Markdown。&lt;!-- paid --&gt; の行より下が有料部分）</small><textarea id="edBody"></textarea></label>
+      <div class="actions">
+        <button class="btn primary" onclick="saveArticle()">保存</button>
+        <button class="btn" onclick="runArticle('draft')">note に下書き保存</button>
+        <button class="btn" onclick="runArticle('publish')">今すぐ公開</button>
+        <button class="btn" onclick="deleteArticle()">削除</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="topics">
+    <div class="card"><h3>ネタ帳</h3>
+      <p><small>売れたタグを多く含むテーマから先に生成されます。</small></p>
+      <div class="scroll"><table id="topicList"></table></div>
+      <div class="row" style="margin-top:12px">
+        <input id="tTitle" placeholder="テーマ"><input id="tPrice" type="number" placeholder="価格（無料は0）" value="500">
+        <input id="tTags" placeholder="タグ（カンマ区切り）"><input id="tNotes" placeholder="メモ（実体験など）">
+      </div>
+      <div class="actions"><button class="btn" onclick="addTopic()">＋ 追加</button></div>
+    </div>
+  </section>
+
+  <section id="logs">
+    <div class="card"><h3>公開の記録</h3><div class="scroll"><table id="pubLog"></table></div></div>
+    <div class="card"><h3>ブラウザ操作の画面（直近20回）</h3><div id="runs"></div></div>
+  </section>
+
+  <section id="settings">
+    <div class="card">
+      <div class="row">
+        <label><small>月の目標（円・手取り）</small><input id="sGoal" type="number"></label>
+        <label><small>note の手数料率（概算）</small><input id="sFee" type="number" step="0.01"></label>
+        <label><small>公開の最低間隔（時間）</small><input id="sInterval" type="number"></label>
+        <label><small>予約を何本たくわえるか</small><input id="sBuffer" type="number"></label>
+      </div>
+      <label><small>公開スケジュール（例：1 20:00, 3 20:00, 5 20:00　曜日は 0=日〜6=土、日本時間）</small><input id="sSchedule"></label>
+      <div class="row" style="margin-top:8px">
+        <label><input type="checkbox" id="sAutoGen" style="width:auto"> 記事を自動で生成する</label>
+        <label><input type="checkbox" id="sAutoApprove" style="width:auto"> 生成した記事を確認なしで公開OKにする</label>
+      </div>
+      <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
+      <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
+        <button class="btn" onclick="act('/api/check-login', {}, 'ログイン確認')">note のログイン確認</button></div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const yen = (n) => `${Math.round(n).toLocaleString()} 円`;
+const jst = (iso) => iso ? new Date(iso).toLocaleString("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", weekday:"short", hour:"2-digit", minute:"2-digit" }) : "未定";
+const statusLabel = { draft:"確認待ち", ready:"公開OK", published:"公開済み", error:"失敗（要確認）" };
+
+function toast(msg, ms = 4000) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); if (ms) t._h = setTimeout(() => t.style.display = "none", ms); }
+async function api(url, method = "GET", body) {
+  const r = await fetch(url, { method, headers:{ "content-type":"application/json" }, body: body && JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw Object.assign(new Error(data.error), data);
+  return data;
+}
+async function act(url, body, label) {
+  document.querySelectorAll("button").forEach((b) => b.disabled = true);
+  toast(`${label} 中…（数分かかることがあります）`, 0);
+  try { const r = await api(url, "POST", body); toast(`${label}：完了\n${JSON.stringify(r, null, 1).slice(0, 600)}`, 8000); }
+  catch (e) { toast(`${label}：失敗\n${e.message}${e.shots ? `\n画面は「実行ログ」の ${e.shots}` : ""}`, 12000); }
+  finally { document.querySelectorAll("button").forEach((b) => b.disabled = false); load(); }
+}
+
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach((x) => x.classList.remove("on"));
+  b.classList.add("on"); $(b.dataset.tab).classList.add("on");
+});
+
+async function loadDash() {
+  const d = await api("/api/dashboard");
+  const pct = Math.min(100, d.pace / d.goal * 100);
+  $("kpis").innerHTML = `
+    <div class="kpi"><small>${d.month} の売上（手取りの概算）</small><b>${yen(d.monthNet)}</b></div>
+    <div class="kpi"><small>このペースだと月末</small><b>${yen(d.pace)}</b><div class="bar"><i style="width:${pct}%"></i></div><small>目標 ${yen(d.goal)}</small></div>
+    <div class="kpi"><small>公開済み</small><b>${d.perArticle.length} 本</b></div>
+    <div class="kpi"><small>公開予定</small><b>${d.upcoming.length} 本</b></div>`;
+  $("sugg").innerHTML = d.suggestions.map((s) => `<li>${esc(s)}</li>`).join("") || "<li>売上を入力すると提案が出ます。</li>";
+  $("upcoming").innerHTML = "<tr><th>公開予定</th><th>タイトル</th><th>価格</th><th>状態</th></tr>" + d.upcoming.map((a) =>
+    `<tr><td>${jst(a.publish_at)}</td><td><a href="#" onclick="openArticle('${esc(a.name)}');return false">${esc(a.title)}</a></td><td>${a.price ? yen(a.price) : "無料"}</td><td><span class="tag s-${a.status}">${statusLabel[a.status]}</span></td></tr>`).join("");
+  $("perArticle").innerHTML = "<tr><th>記事</th><th>価格</th><th>累計販売</th><th>累計売上</th><th>購入率</th><th>今月の販売数・閲覧数を入力</th></tr>" + d.perArticle.map((a) =>
+    `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.title)}</a></td><td>${a.price ? yen(a.price) : "無料"}</td><td>${a.sales}</td><td>${yen(a.revenue)}</td><td>${a.conversion == null ? "-" : (a.conversion * 100).toFixed(1) + "%"}</td>
+     <td><input style="width:70px" id="s-${esc(a.name)}" type="number" placeholder="販売" value="${a.monthSales || ""}"> <input style="width:80px" id="v-${esc(a.name)}" type="number" placeholder="閲覧"> <button class="btn" onclick="saveSales('${esc(a.name)}','${d.month}')">保存</button></td></tr>`).join("");
+}
+async function saveSales(name, month) {
+  await api("/api/sales", "POST", { file:name, month, sales:$(`s-${name}`).value, views:$(`v-${name}`).value });
+  toast("保存しました"); loadDash();
+}
+
+async function loadArticles() {
+  const list = await api("/api/articles");
+  $("articleList").innerHTML = "<tr><th>公開予定</th><th>タイトル</th><th>価格</th><th>状態</th><th>文字数</th></tr>" + list.map((a) =>
+    `<tr><td>${jst(a.publish_at)}</td><td><a href="#" onclick="openArticle('${esc(a.name)}');return false">${esc(a.title)}</a>${a.url ? ` <a href="${esc(a.url)}" target="_blank">↗</a>` : ""}</td><td>${a.price ? yen(a.price) : "無料"}</td><td><span class="tag s-${a.status}">${statusLabel[a.status] || a.status}</span></td><td>${a.chars}</td></tr>`).join("");
+}
+let current = null;
+const toLocal = (iso) => iso ? new Date(new Date(iso).getTime() + 9 * 36e5).toISOString().slice(0, 16) : "";
+const fromLocal = (v) => v ? new Date(`${v}:00+09:00`).toISOString() : "";
+async function openArticle(name) {
+  document.querySelector('[data-tab="articles"]').click();
+  const { meta, body } = await api(`/api/articles/${encodeURIComponent(name)}`);
+  current = { name, meta };
+  $("editor").style.display = "block"; $("edName").textContent = name;
+  $("edTitle").value = meta.title || ""; $("edPrice").value = meta.price || 0; $("edStatus").value = meta.status || "draft";
+  $("edTags").value = (Array.isArray(meta.tags) ? meta.tags : meta.tags ? [meta.tags] : []).join(", ");
+  $("edAt").value = toLocal(meta.publish_at); $("edAccount").value = meta.account || ""; $("edCta").value = meta.cta || "";
+  $("edBody").value = body; $("editor").scrollIntoView({ behavior:"smooth" });
+  if (meta.error) toast(`前回の公開で失敗しました：${meta.error}\n「実行ログ」で画面を確認し、直したら状態を「公開OK」に戻してください。`, 12000);
+}
+async function saveArticle() {
+  const meta = { ...current.meta, title:$("edTitle").value, price:Number($("edPrice").value) || 0, status:$("edStatus").value,
+    tags:$("edTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), publish_at:fromLocal($("edAt").value),
+    account:$("edAccount").value.trim(), cta:$("edCta").value.trim(),
+    error:$("edStatus").value === "error" ? current.meta.error : "" };
+  await api(`/api/articles/${encodeURIComponent(current.name)}`, "PUT", { meta, body:$("edBody").value });
+  current.meta = meta; toast("保存しました"); load();
+}
+async function runArticle(mode) {
+  if (mode === "publish" && !confirm("今すぐ note に公開します。よろしいですか？")) return;
+  await saveArticle();
+  act(`/api/articles/${encodeURIComponent(current.name)}/run`, { mode }, mode === "publish" ? "公開" : "下書き保存");
+}
+async function deleteArticle() {
+  if (!confirm("この記事ファイルを削除します（note 上の記事は消えません）")) return;
+  await api(`/api/articles/${encodeURIComponent(current.name)}`, "DELETE");
+  $("editor").style.display = "none"; load();
+}
+async function newArticle() { const { name } = await api("/api/articles", "POST", {}); await load(); openArticle(name); }
+
+let topics = [];
+async function loadTopics() {
+  topics = await api("/api/topics");
+  $("topicList").innerHTML = "<tr><th>テーマ</th><th>価格</th><th>タグ</th><th>状態</th><th></th></tr>" + topics.map((t) =>
+    `<tr><td>${esc(t.title)}${t.notes ? `<br><small>${esc(t.notes)}</small>` : ""}</td><td>${t.price ? yen(t.price) : "無料"}</td><td>${esc((t.tags || []).join(", "))}</td><td>${t.status === "todo" ? "未着手" : "生成済み"}</td>
+     <td>${t.status === "todo" ? `<button class="btn" onclick="act('/api/generate', {topicId:'${esc(t.id)}'}, '生成')">今すぐ生成</button>` : ""}<button class="btn" onclick="removeTopic('${esc(t.id)}')">削除</button></td></tr>`).join("");
+}
+async function addTopic() {
+  topics.push({ id:Date.now().toString(36), title:$("tTitle").value, price:Number($("tPrice").value) || 0,
+    tags:$("tTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), notes:$("tNotes").value, status:"todo" });
+  await api("/api/topics", "PUT", topics); $("tTitle").value = $("tNotes").value = ""; loadTopics();
+}
+async function removeTopic(id) { topics = topics.filter((t) => t.id !== id); await api("/api/topics", "PUT", topics); loadTopics(); }
+
+async function loadLogs() {
+  const pub = await api("/api/published");
+  $("pubLog").innerHTML = "<tr><th>日時</th><th>記事</th><th>種類</th><th>URL</th></tr>" + pub.map((p) =>
+    `<tr><td>${jst(p.at)}</td><td>${esc(p.title)}</td><td>${p.draft ? "下書き" : "公開"}</td><td><a href="${esc(p.url)}" target="_blank">開く</a></td></tr>`).join("");
+  const runs = await api("/api/runs");
+  $("runs").innerHTML = runs.map((r) => `<div><small>${esc(r.dir)}</small><div class="shots">${r.shots.map((s) =>
+    `<a href="/shots/${encodeURIComponent(r.dir)}/${encodeURIComponent(s)}" target="_blank"><img loading="lazy" src="/shots/${encodeURIComponent(r.dir)}/${encodeURIComponent(s)}" alt="${esc(s)}"></a>`).join("")}</div></div>`).join("") || "まだ実行していません。";
+}
+
+async function loadSettings() {
+  const s = await api("/api/settings");
+  $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
+  $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");
+  $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
+}
+async function saveSettings() {
+  const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
+  await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
+    bufferSize:Number($("sBuffer").value), schedule, autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
+  toast("保存しました"); load();
+}
+
+function load() { loadDash(); loadArticles(); loadTopics(); loadLogs(); loadSettings(); }
+load();
+</script>
+</body>
+</html>
