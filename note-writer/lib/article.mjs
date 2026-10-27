@@ -7,6 +7,8 @@ export const PAID_MARKER = "<!-- paid -->";
 
 // 先頭の --- で囲まれた key: value を読む（依存ライブラリなしの簡易版）
 export function parseFrontmatter(src) {
+  // Windows の Git で取ってきたファイルは改行が CRLF になっている
+  src = src.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const m = src.match(/^---\n([\s\S]*?)\n---\n?/);
   if (!m) throw new Error("記事の先頭に --- で囲んだメタ情報がありません");
   const meta = {};
@@ -36,7 +38,7 @@ function inline(text) {
 // note のエディタが受け付ける範囲（見出し・段落・箇条書き・引用・コード）だけを変換する
 export function markdownToBlocks(md) {
   const blocks = [];
-  const lines = md.split("\n");
+  const lines = md.replace(/\r\n?/g, "\n").split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
@@ -108,7 +110,14 @@ export function listArticles() {
   return fs.readdirSync(paths.articles)
     .filter((f) => f.endsWith(".md") && !f.startsWith("_"))
     .map((name) => {
-      const { meta, body } = readArticleSource(name);
+      let meta, body;
+      try {
+        ({ meta, body } = readArticleSource(name));
+      } catch (e) {
+        // 読めないファイルが1つあっても、一覧全体は出す
+        return { name, title: name, price: 0, tags: [], status: "error", account: "default",
+          publish_at: "", url: "", topic: "", error: `読み込めません：${e.message}`, chars: 0 };
+      }
       return {
         name,
         title: meta.title || "",

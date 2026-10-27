@@ -293,7 +293,12 @@ async function saveSettings() {
   toast("保存しました"); load();
 }
 
-function load() { loadDash(); loadArticles(); loadTopics(); loadLogs(); loadSettings(); }
+function load() {
+  // 読み込みの失敗を画面に出す（何も出ないと原因がわからないため）
+  for (const [label, fn] of [["ダッシュボード", loadDash], ["記事", loadArticles], ["ネタ帳", loadTopics], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
+    fn().catch((e) => toast(`${label}の読み込みに失敗：${e.message}`, 12000));
+  }
+}
 load();
 </script>
 </body>
