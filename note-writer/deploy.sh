@@ -63,8 +63,12 @@ for s in NOTE_EMAIL NOTE_PASSWORD ANTHROPIC_API_KEY ADMIN_PASSWORD CRON_TOKEN; d
 done
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA" \
   --role=roles/storage.objectUser >/dev/null
+# 新しいプロジェクトでは、ソースからのビルドに使うこのアカウントにビルド権限が付いていない
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" \
+  --role=roles/cloudbuild.builds.builder --condition=None >/dev/null
 
-# ビルドとデプロイ
+# ビルドとデプロイ（付けたばかりの権限が効くまで少しかかるので、失敗したら待ってやり直す）
+deploy() {
 gcloud run deploy "$SERVICE" --quiet \
   --source "$DIR" \
   --region "$REGION" \
@@ -77,6 +81,13 @@ gcloud run deploy "$SERVICE" --quiet \
   --add-volume-mount "volume=data,mount-path=/data" \
   --set-env-vars "DATA_DIR=/data" \
   --set-secrets "NOTE_EMAIL=NOTE_EMAIL:latest,NOTE_PASSWORD=NOTE_PASSWORD:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,ADMIN_PASSWORD=ADMIN_PASSWORD:latest,CRON_TOKEN=CRON_TOKEN:latest"
+}
+for attempt in 1 2 3; do
+  if deploy; then break; fi
+  [ "$attempt" = 3 ] && { echo "デプロイに3回失敗しました。上のエラーを確認してください。"; exit 1; }
+  echo "権限の反映を待って、60秒後にやり直します（${attempt}/3）..."
+  sleep 60
+done
 
 URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
 CRON_TOKEN="$(gcloud secrets versions access latest --secret=CRON_TOKEN)"
