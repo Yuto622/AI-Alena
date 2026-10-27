@@ -107,6 +107,12 @@
   </section>
 
   <section id="settings">
+    <div class="card"><h3>全記事の最後に付ける案内（アプリの紹介など）</h3>
+      <p><small>ここに書いた文章が、すべての記事の最後に自動で付きます（有料記事では有料部分の最後）。空にして保存すると付かなくなります。Markdown で書けます。</small></p>
+      <textarea id="ctaText" style="min-height:180px"></textarea>
+      <div class="actions"><button class="btn primary" onclick="saveCta()">保存</button>
+        <button class="btn" onclick="ctaExample()">例を入れる</button></div>
+    </div>
     <div class="card"><h3>note のログイン情報</h3>
       <div id="accounts"></div>
       <div class="row">
@@ -265,6 +271,20 @@ async function loadAccounts() {
   const cur = list.find((a) => a.account === $("aName").value);
   if (cur && !$("aEmail").value) $("aEmail").value = cur.email;
 }
+async function loadCta() { $("ctaText").value = (await api("/api/cta")).text; }
+function ctaExample() {
+  $("ctaText").value = `---
+
+## 英語を「話せる」ようにするアプリを作りました
+
+UCLA で物理を学びながら、英語が第二言語の自分が本当に欲しかった英語学習アプリを作りました。{{アプリの特長を1〜2文で}}
+
+**▶ アプリを見てみる：[{{アプリのURL}}]({{アプリのURL}})**`;
+}
+async function saveCta() {
+  try { await api("/api/cta", "PUT", { text:$("ctaText").value }); toast("保存しました。次に公開する記事から付きます"); }
+  catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
 async function saveCookie() {
   try {
     const r = await api(`/api/accounts/${encodeURIComponent($("aName").value.trim())}/cookies`, "PUT", { cookie:$("aCookie").value });
@@ -280,6 +300,7 @@ async function saveAccount() {
 
 async function loadSettings() {
   loadAccounts();
+  loadCta();
   const s = await api("/api/settings");
   $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
   $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");

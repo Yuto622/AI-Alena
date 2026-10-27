@@ -148,9 +148,11 @@ export function loadArticle(file) {
   }
   const freeBlocks = markdownToBlocks(free);
   const paidBlocks = paid === undefined ? [] : markdownToBlocks(paid);
-  // cta: uspeak のように指定すると、cta/uspeak.md を記事の最後に付ける
-  if (meta.cta) {
-    const ctaFile = path.join(paths.cta, `${meta.cta}.md`);
+  // cta: uspeak のように指定すると、cta/uspeak.md を記事の最後に付ける。
+  // 指定がなければ、管理画面で書いた全記事共通の案内（cta/default.md）を付ける。cta: none で付けない
+  const ctaName = meta.cta || (fs.existsSync(path.join(paths.cta, "default.md")) ? "default" : "");
+  if (ctaName && ctaName !== "none") {
+    const ctaFile = path.join(paths.cta, `${ctaName}.md`);
     const cta = fs.readFileSync(ctaFile, "utf8");
     if (cta.includes("{{")) throw new Error(`${ctaFile}: 未設定の {{...}} が残っています`);
     (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(cta));

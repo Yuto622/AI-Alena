@@ -116,6 +116,21 @@ app.put("/api/accounts/:account/cookies", wrap((req) => {
   return { ok: true, count };
 }));
 
+// 全記事の最後に付ける案内（アプリの URL など）。空で保存すると付けなくなる
+const defaultCta = path.join(paths.cta, "default.md");
+app.get("/api/cta", wrap(() => ({ text: fs.existsSync(defaultCta) ? fs.readFileSync(defaultCta, "utf8") : "" })));
+app.put("/api/cta", wrap((req) => {
+  const text = String(req.body.text || "").trim();
+  if (!text) {
+    fs.rmSync(defaultCta, { force: true });
+    return { ok: true };
+  }
+  if (text.includes("{{")) throw new Error("{{ }} の部分を実際の内容に書き換えてください");
+  fs.mkdirSync(paths.cta, { recursive: true });
+  fs.writeFileSync(defaultCta, text + "\n");
+  return { ok: true };
+}));
+
 app.get("/api/settings", wrap(() => ({
   ...getSettings(),
   profile: fs.existsSync(paths.profile) ? fs.readFileSync(paths.profile, "utf8") : "",
