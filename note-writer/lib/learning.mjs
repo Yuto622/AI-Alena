@@ -19,8 +19,10 @@ export function appPerformance() {
   const stats = clickStats();
   return getApps().map((app) => {
     const exposures = published.filter((a) => a.app === app.id).length;
+    // 予約・ダウンロードへのクリックを成果として数える（ホームページへのクリックは別に見る）
     const clicks = stats[app.id]?.total || 0;
-    return { id: app.id, name: app.name, exposures, clicks, perArticle: exposures ? clicks / exposures : null };
+    const siteClicks = stats[`${app.id}:site`]?.total || 0;
+    return { id: app.id, name: app.name, exposures, clicks, siteClicks, perArticle: exposures ? clicks / exposures : null };
   });
 }
 

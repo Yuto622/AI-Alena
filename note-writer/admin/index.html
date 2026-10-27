@@ -121,6 +121,10 @@
         <label><small>URL（アプリのページ／法人向けは説明の予約ページ）</small><input id="apUrl" placeholder="https://"></label>
       </div>
       <div class="row">
+        <label><small>運営会社の名前（任意）</small><input id="apCompany" placeholder="例：合同会社 U-Speak Lab"></label>
+        <label><small>ホームページの URL（任意。信頼のために載せる）</small><input id="apSite" placeholder="https://"></label>
+      </div>
+      <div class="row">
         <label><small>どんなアプリか（AI が選ぶときに読む）</small><input id="apDesc" placeholder="例：シャドーイングと発音記号を毎日5分で練習できる"></label>
         <label><small>向いている人</small><input id="apAud" placeholder="例：英語を話せるようになりたい大学生・社会人"></label>
       </div>
@@ -311,17 +315,18 @@ async function loadApps() {
   const d = await api("/api/apps");
   apps = d.apps;
   const perf = Object.fromEntries(d.performance.map((p) => [p.id, p]));
-  $("appList").innerHTML = "<tr><th>アプリ</th><th>どんなアプリか</th><th>載せた記事</th><th>クリック</th><th>1本あたり</th><th></th></tr>" + apps.map((a) => {
+  $("appList").innerHTML = "<tr><th>アプリ</th><th>どんなアプリか</th><th>載せた記事</th><th>クリック</th><th>1本あたり</th><th>HP</th><th></th></tr>" + apps.map((a) => {
     const p = perf[a.id] || {};
     return `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.name)}</a><br><small>${a.kind === "business" ? "法人向け" : "個人向けアプリ"}</small></td><td>${esc(a.description || "")}</td><td>${p.exposures ?? 0}</td><td>${p.clicks ?? 0}</td>
-      <td>${p.perArticle == null ? "-" : p.perArticle.toFixed(2)}</td><td><button class="btn" onclick="removeApp('${esc(a.id)}')">削除</button></td></tr>`;
+      <td>${p.perArticle == null ? "-" : p.perArticle.toFixed(2)}</td><td>${p.siteClicks ?? 0}</td><td><button class="btn" onclick="removeApp('${esc(a.id)}')">削除</button></td></tr>`;
   }).join("");
   $("learnings").textContent = d.learnings || "公開した記事が3本たまると、毎週ここに学びがまとまり、記事づくり・テーマ選び・アプリ選びに使われます。";
 }
 async function addApp() {
   const next = [...apps, { id:Date.now().toString(36), name:$("apName").value.trim(), url:$("apUrl").value.trim(), kind:$("apKind").value,
+    company:$("apCompany").value.trim(), siteUrl:$("apSite").value.trim() || undefined,
     description:$("apDesc").value.trim(), audience:$("apAud").value.trim(), pitch:$("apPitch").value.trim() }];
-  try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch"].forEach((id) => $(id).value = ""); toast("追加しました"); loadApps(); }
+  try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch","apCompany","apSite"].forEach((id) => $(id).value = ""); toast("追加しました"); loadApps(); }
   catch (e) { toast(`追加できません：${e.message}`, 8000); }
 }
 async function removeApp(id) {

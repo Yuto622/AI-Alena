@@ -11,6 +11,7 @@ export function saveApps(apps) {
   for (const a of apps) {
     if (!a.id || !/^[\w-]+$/.test(a.id)) throw new Error("アプリの ID が不正です");
     if (!/^https:\/\//.test(a.url || "")) throw new Error(`「${a.name}」の URL は https:// から書いてください`);
+    if (a.siteUrl && !/^https:\/\//.test(a.siteUrl)) throw new Error(`「${a.name}」のホームページの URL は https:// から書いてください`);
   }
   writeJson(APPS, apps);
 }
@@ -85,7 +86,10 @@ export function appCtaMarkdown(appId, articleName) {
   const app = getApps().find((a) => a.id === appId);
   if (!app) return "";
   const base = process.env.PUBLIC_URL;
-  const link = base ? `${base}/go/${app.id}?a=${encodeURIComponent(articleName)}` : app.url;
+  const track = (to) => `${base}/go/${app.id}?a=${encodeURIComponent(articleName)}${to ? `&to=${to}` : ""}`;
+  const link = base ? track() : app.url;
+  const site = app.siteUrl ? (base ? track("site") : app.siteUrl) : "";
+  const siteLine = site ? `\n運営：${app.company || app.name}（[ホームページ](${site})）\n` : "";
   if (app.kind === "business") {
     // 法人向け：教室には説明の予約へ、保護者には「通っている教室に伝えてもらう」（教室を飛ばして売らない）
     return `---
@@ -96,7 +100,7 @@ ${app.pitch || app.description || ""}
 
 - **英語教室・学習塾の方へ**：▶ [無料のオンライン説明を予約する](${link})
 - **保護者の方へ**：教室単位で導入する教材です。気になったら、お子さんの通う英語教室の先生に伝えてみてください。
-`;
+${siteLine}`;
   }
   return `---
 
@@ -105,5 +109,5 @@ ${app.pitch || app.description || ""}
 ${app.pitch || app.description || ""}
 
 **▶ [「${app.name}」をスマホに入れる](${link})**
-`;
+${siteLine}`;
 }

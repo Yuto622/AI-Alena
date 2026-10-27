@@ -42,12 +42,13 @@ app.post("/cron/tick", async (req, res) => {
 app.get("/go/:app", (req, res) => {
   const target = getApps().find((a) => a.id === req.params.app);
   if (!target) return res.status(404).send("not found");
+  const toSite = req.query.to === "site" && target.siteUrl;
   try {
-    recordClick(target.id, req.query.a);
+    recordClick(toSite ? `${target.id}:site` : target.id, req.query.a);
   } catch (e) {
     console.error(`クリックの記録に失敗：${e.message}`);
   }
-  res.redirect(302, target.url);
+  res.redirect(302, toSite ? target.siteUrl : target.url);
 });
 
 // ここから下は管理画面（Basic 認証）
