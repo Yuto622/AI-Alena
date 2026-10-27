@@ -9,6 +9,10 @@ import { runNote } from "./lib/publisher.mjs";
 import { tick, publishArticle, generateNext, nextFreeSlot } from "./lib/scheduler.mjs";
 import { dashboard } from "./lib/insights.mjs";
 import { listCredentials, setCredentials, setSessionCookies } from "./lib/credentials.mjs";
+import { getApps, saveApps, recordClick } from "./lib/apps.mjs";
+import { appPerformance, getLearnings, updateLearnings } from "./lib/learning.mjs";
+import { renderThumbnail } from "./lib/thumbnail.mjs";
+import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
 } from "./lib/store.mjs";
@@ -30,6 +34,18 @@ app.post("/cron/tick", async (req, res) => {
     return res.status(401).end();
   }
   res.json(await tick());
+});
+
+// 記事の中のアプリのリンク。クリックを数えてからアプリのページへ送る（誰でも開ける）
+app.get("/go/:app", (req, res) => {
+  const target = getApps().find((a) => a.id === req.params.app);
+  if (!target) return res.status(404).send("not found");
+  try {
+    recordClick(target.id, req.query.a);
+  } catch (e) {
+    console.error(`クリックの記録に失敗：${e.message}`);
+  }
+  res.redirect(302, target.url);
 });
 
 // ここから下は管理画面（Basic 認証）
@@ -115,6 +131,33 @@ app.put("/api/accounts/:account/cookies", wrap((req) => {
   const count = setSessionCookies(req.params.account, req.body.cookie || "");
   return { ok: true, count };
 }));
+
+app.get("/api/apps", wrap(() => ({ apps: getApps(), performance: appPerformance(), learnings: getLearnings() })));
+app.post("/api/learnings", wrap(() => updateLearnings(new Date(), { force: true })));
+app.put("/api/apps", wrap((req) => {
+  saveApps(req.body);
+  return { ok: true };
+}));
+
+// 見出し画像の見本（note には載せない）
+app.get("/api/articles/:name/thumbnail.png", async (req, res) => {
+  try {
+    const { meta } = readArticleSource(req.params.name);
+    const { chromium } = createRequire(import.meta.url)("playwright");
+    const browser = await chromium.launch();
+    try {
+      const png = await renderThumbnail(browser, {
+        title: meta.title, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags].filter(Boolean),
+        price: Number(meta.price || 0), footer: getSettings().thumbnailFooter,
+      });
+      res.type("png").send(png);
+    } finally {
+      await browser.close();
+    }
+  } catch (e) {
+    res.status(400).send(e.message);
+  }
+});
 
 // 全記事の最後に付ける案内（アプリの URL など）。空で保存すると付けなくなる
 const defaultCta = path.join(paths.cta, "default.md");

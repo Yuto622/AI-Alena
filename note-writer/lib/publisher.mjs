@@ -7,6 +7,7 @@ import { createRequire } from "module";
 import { paths } from "./config.mjs";
 import { getPublished, addPublished, getSettings } from "./store.mjs";
 import { getCredentials, saveSession, loadSession, hasSession } from "./credentials.mjs";
+import { renderThumbnail } from "./thumbnail.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -110,9 +111,36 @@ async function saveDraft(page, run) {
   }
 }
 
+// 見出し画像を作って載せる。note の画面が想定と違っても、画像なしで投稿を続ける
+async function uploadHeaderImage(page, article, run) {
+  const settings = getSettings();
+  if (!settings.headerImage) return;
+  try {
+    const png = await renderThumbnail(page.context().browser(), { ...article, footer: settings.thumbnailFooter });
+    fs.mkdirSync(run.dir, { recursive: true });
+    const file = path.join(run.dir, "header.png");
+    fs.writeFileSync(file, png);
+    const button = await first(page, [
+      'button[aria-label*="画像"]', 'button:has-text("画像を追加")', '[class*="eyecatch"] button', '[class*="Eyecatch"] button',
+    ], 8000);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 8000 }), button.click()]);
+    await chooser.setFiles(file);
+    // 切り抜きの確認画面が出たら確定する
+    const ok = await first(page, ['button:has-text("保存")', 'button:has-text("適用")', 'button:has-text("完了")'], 8000).catch(() => null);
+    if (ok) await ok.click();
+    await page.waitForTimeout(2000);
+    await run.shot(page, "header-image");
+    run.info("🖼️ 見出し画像を載せました");
+  } catch (e) {
+    run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0]}）。画像なしで続けます`);
+    await page.keyboard.press("Escape").catch(() => {});
+  }
+}
+
 async function post(page, article, draftOnly, run) {
   await page.goto("https://note.com/notes/new", { waitUntil: "domcontentloaded" });
   const title = await first(page, ['textarea[placeholder*="タイトル"]', '[placeholder*="記事タイトル"]'], 20000);
+  await uploadHeaderImage(page, article, run);
   await title.fill(article.title);
   const editor = await first(page, [".ProseMirror", '[contenteditable="true"]']);
   await pasteHtml(page, editor, article.html);

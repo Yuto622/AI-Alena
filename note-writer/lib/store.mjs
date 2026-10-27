@@ -20,6 +20,11 @@ export const DEFAULT_SETTINGS = {
   bufferSize: 3,
   dailyGenerateLimit: 2,
   minIntervalHours: 3,
+  // 見出し画像を自動で作って載せる（ブラウザで描くので費用0円）
+  headerImage: true,
+  // アプリ選びで、まだ試していないアプリを選ぶ割合（データ集め）
+  exploreRate: 0.2,
+  thumbnailFooter: "UCLA 在学生が書く 英語と海外大学のはなし",
 };
 
 export function readJson(file, fallback) {

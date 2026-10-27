@@ -2,6 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { paths } from "./config.mjs";
+import { appCtaMarkdown } from "./apps.mjs";
 
 export const PAID_MARKER = "<!-- paid -->";
 
@@ -74,7 +75,7 @@ export function markdownToBlocks(md) {
   return blocks;
 }
 
-const FRONTMATTER_KEYS = ["title", "price", "tags", "status", "account", "cta", "publish_at", "url", "topic", "error"];
+const FRONTMATTER_KEYS = ["title", "price", "tags", "status", "account", "cta", "app", "publish_at", "url", "topic", "error"];
 
 export function serializeArticle(meta, body) {
   const lines = FRONTMATTER_KEYS.filter((k) => meta[k] !== undefined && meta[k] !== "").map((k) => {
@@ -128,6 +129,7 @@ export function listArticles() {
         publish_at: meta.publish_at || "",
         url: meta.url || "",
         topic: meta.topic || "",
+        app: meta.app || "",
         error: meta.error || "",
         chars: body.length,
       };
@@ -150,6 +152,10 @@ export function loadArticle(file) {
   const paidBlocks = paid === undefined ? [] : markdownToBlocks(paid);
   // cta: uspeak のように指定すると、cta/uspeak.md を記事の最後に付ける。
   // 指定がなければ、管理画面で書いた全記事共通の案内（cta/default.md）を付ける。cta: none で付けない
+  // app: で選ばれたアプリの紹介を先に付ける
+  if (meta.app && meta.app !== "none") {
+    (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(appCtaMarkdown(meta.app, path.basename(file))));
+  }
   const ctaName = meta.cta || (fs.existsSync(path.join(paths.cta, "default.md")) ? "default" : "");
   if (ctaName && ctaName !== "none") {
     const ctaFile = path.join(paths.cta, `${ctaName}.md`);

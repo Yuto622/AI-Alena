@@ -7,3 +7,7 @@ settings.json
 deploy.sh
 .deploy-lf.sh
 credentials.enc.json
+apps.json
+clicks.json
+learnings.md
+learnings.json

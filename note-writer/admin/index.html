@@ -48,6 +48,7 @@
     <button data-tab="dash" class="on">ダッシュボード</button>
     <button data-tab="articles">記事</button>
     <button data-tab="topics">ネタ帳</button>
+    <button data-tab="apps">アプリ</button>
     <button data-tab="logs">実行ログ</button>
     <button data-tab="settings">設定</button>
   </nav>
@@ -78,7 +79,9 @@
         <label><small>公開予定（日本時間）</small><input id="edAt" type="datetime-local"></label>
         <label><small>アカウント</small><input id="edAccount" placeholder="default"></label>
         <label><small>末尾の案内（cta/ のファイル名）</small><input id="edCta" placeholder="なし"></label>
+        <label><small>紹介するアプリ（空なら公開時に AI が選ぶ）</small><select id="edApp"></select></label>
       </div>
+      <p><a id="edThumb" href="#" target="_blank">見出し画像の見本を開く</a></p>
       <label><small>本文（Markdown。&lt;!-- paid --&gt; の行より下が有料部分）</small><textarea id="edBody"></textarea></label>
       <div class="actions">
         <button class="btn primary" onclick="saveArticle()">保存</button>
@@ -98,6 +101,27 @@
         <input id="tTags" placeholder="タグ（カンマ区切り）"><input id="tNotes" placeholder="メモ（実体験など）">
       </div>
       <div class="actions"><button class="btn" onclick="addTopic()">＋ 追加</button></div>
+    </div>
+  </section>
+
+  <section id="apps">
+    <div class="card"><h3>紹介するアプリ</h3>
+      <p><small>記事ごとに、内容に一番合うアプリを AI が選んで記事の最後で紹介します。2割の記事では、まだ載せた回数の少ないアプリを試してデータを集めます。リンクは自分のサーバーを経由させて、クリックを数えます。</small></p>
+      <div class="scroll"><table id="appList"></table></div>
+      <div class="row" style="margin-top:12px">
+        <label><small>アプリ名</small><input id="apName"></label>
+        <label><small>URL（App Store / Google Play）</small><input id="apUrl" placeholder="https://"></label>
+      </div>
+      <div class="row">
+        <label><small>どんなアプリか（AI が選ぶときに読む）</small><input id="apDesc" placeholder="例：シャドーイングと発音記号を毎日5分で練習できる"></label>
+        <label><small>向いている人</small><input id="apAud" placeholder="例：英語を話せるようになりたい大学生・社会人"></label>
+      </div>
+      <label><small>記事に載せる紹介文（1〜2文）</small><input id="apPitch" placeholder="例：英語が第二言語の私が、話す練習のために作ったアプリです。"></label>
+      <div class="actions"><button class="btn primary" onclick="addApp()">＋ 追加</button></div>
+    </div>
+    <div class="card"><h3>これまでの学び（週1回、実績から自動でまとめ直す）</h3>
+      <pre id="learnings" style="white-space:pre-wrap;font:inherit"></pre>
+      <div class="actions"><button class="btn" onclick="act('/api/learnings', {}, '学びのまとめ直し')">今すぐまとめ直す</button></div>
     </div>
   </section>
 
@@ -145,6 +169,9 @@
         <label><input type="checkbox" id="sAutoGen" style="width:auto"> 記事を自動で生成する</label>
         <label><input type="checkbox" id="sAutoApprove" style="width:auto"> 自動チェックに通った記事は、人の確認なしで公開OKにする</label>
         <label><small>1日に生成する上限（本）</small><input id="sDaily" type="number" min="0"></label>
+        <label><input type="checkbox" id="sHeader" style="width:auto"> 見出し画像を自動で作って載せる（費用0円）</label>
+        <label><small>見出し画像の下に入れる一言</small><input id="sFooter"></label>
+        <label><small>アプリを試しに選ぶ割合（0〜1）</small><input id="sExplore" type="number" step="0.05" min="0" max="1"></label>
       </div>
       <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
       <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
@@ -216,13 +243,17 @@ async function openArticle(name) {
   $("edTitle").value = meta.title || ""; $("edPrice").value = meta.price || 0; $("edStatus").value = meta.status || "draft";
   $("edTags").value = (Array.isArray(meta.tags) ? meta.tags : meta.tags ? [meta.tags] : []).join(", ");
   $("edAt").value = toLocal(meta.publish_at); $("edAccount").value = meta.account || ""; $("edCta").value = meta.cta || "";
+  $("edApp").innerHTML = `<option value="">（AI が選ぶ）</option><option value="none">紹介しない</option>` +
+    apps.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
+  $("edApp").value = meta.app || "";
+  $("edThumb").href = `/api/articles/${encodeURIComponent(name)}/thumbnail.png`;
   $("edBody").value = body; $("editor").scrollIntoView({ behavior:"smooth" });
   if (meta.error) toast(`前回の公開で失敗しました：${meta.error}\n「実行ログ」で画面を確認し、直したら状態を「公開OK」に戻してください。`, 12000);
 }
 async function saveArticle() {
   const meta = { ...current.meta, title:$("edTitle").value, price:Number($("edPrice").value) || 0, status:$("edStatus").value,
     tags:$("edTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), publish_at:fromLocal($("edAt").value),
-    account:$("edAccount").value.trim(), cta:$("edCta").value.trim(),
+    account:$("edAccount").value.trim(), cta:$("edCta").value.trim(), app:$("edApp").value,
     error:$("edStatus").value === "error" ? current.meta.error : "" };
   await api(`/api/articles/${encodeURIComponent(current.name)}`, "PUT", { meta, body:$("edBody").value });
   current.meta = meta; toast("保存しました"); load();
@@ -238,6 +269,29 @@ async function deleteArticle() {
   $("editor").style.display = "none"; load();
 }
 async function newArticle() { const { name } = await api("/api/articles", "POST", {}); await load(); openArticle(name); }
+
+let apps = [];
+async function loadApps() {
+  const d = await api("/api/apps");
+  apps = d.apps;
+  const perf = Object.fromEntries(d.performance.map((p) => [p.id, p]));
+  $("appList").innerHTML = "<tr><th>アプリ</th><th>どんなアプリか</th><th>載せた記事</th><th>クリック</th><th>1本あたり</th><th></th></tr>" + apps.map((a) => {
+    const p = perf[a.id] || {};
+    return `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.name)}</a></td><td>${esc(a.description || "")}</td><td>${p.exposures ?? 0}</td><td>${p.clicks ?? 0}</td>
+      <td>${p.perArticle == null ? "-" : p.perArticle.toFixed(2)}</td><td><button class="btn" onclick="removeApp('${esc(a.id)}')">削除</button></td></tr>`;
+  }).join("");
+  $("learnings").textContent = d.learnings || "公開した記事が3本たまると、毎週ここに学びがまとまり、記事づくり・テーマ選び・アプリ選びに使われます。";
+}
+async function addApp() {
+  const next = [...apps, { id:Date.now().toString(36), name:$("apName").value.trim(), url:$("apUrl").value.trim(),
+    description:$("apDesc").value.trim(), audience:$("apAud").value.trim(), pitch:$("apPitch").value.trim() }];
+  try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch"].forEach((id) => $(id).value = ""); toast("追加しました"); loadApps(); }
+  catch (e) { toast(`追加できません：${e.message}`, 8000); }
+}
+async function removeApp(id) {
+  if (!confirm("このアプリを外します（公開済みの記事のリンクは、アプリのページに飛ばなくなります）")) return;
+  await api("/api/apps", "PUT", apps.filter((a) => a.id !== id)); loadApps();
+}
 
 let topics = [];
 async function loadTopics() {
@@ -306,17 +360,19 @@ async function loadSettings() {
   $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
   $("sDaily").value = s.dailyGenerateLimit;
+  $("sHeader").checked = s.headerImage; $("sFooter").value = s.thumbnailFooter; $("sExplore").value = s.exploreRate;
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
   await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
-    bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule, autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
+    bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule,
+    headerImage:$("sHeader").checked, thumbnailFooter:$("sFooter").value, exploreRate:Math.min(1, Math.max(0, Number($("sExplore").value) || 0)), autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
   toast("保存しました"); load();
 }
 
 function load() {
   // 読み込みの失敗を画面に出す（何も出ないと原因がわからないため）
-  for (const [label, fn] of [["ダッシュボード", loadDash], ["記事", loadArticles], ["ネタ帳", loadTopics], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
+  for (const [label, fn] of [["ダッシュボード", loadDash], ["記事", loadArticles], ["ネタ帳", loadTopics], ["アプリ", loadApps], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
     fn().catch((e) => toast(`${label}の読み込みに失敗：${e.message}`, 12000));
   }
 }

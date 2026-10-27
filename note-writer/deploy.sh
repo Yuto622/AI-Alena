@@ -75,7 +75,10 @@ fi
 has_value CRON_TOKEN || put_secret CRON_TOKEN "$(openssl rand -hex 24)"
 
 # Cloud Run の実行アカウントに、秘密情報とデータ置き場の権限を付ける
-SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+PNUM="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+SA="${PNUM}-compute@developer.gserviceaccount.com"
+# 記事の中のアプリのリンク（クリックを数える）に使う、このサービスの URL
+PUBLIC_URL="https://${SERVICE}-${PNUM}.${REGION}.run.app"
 for s in ANTHROPIC_API_KEY ADMIN_PASSWORD CRON_TOKEN; do
   gcloud secrets add-iam-policy-binding "$s" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor >/dev/null
@@ -98,7 +101,7 @@ gcloud run deploy "$SERVICE" --quiet \
   --no-invoker-iam-check \
   --add-volume "name=data,type=cloud-storage,bucket=$BUCKET" \
   --add-volume-mount "volume=data,mount-path=/data" \
-  --set-env-vars "DATA_DIR=/data" \
+  --set-env-vars "DATA_DIR=/data,PUBLIC_URL=$PUBLIC_URL" \
   --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,ADMIN_PASSWORD=ADMIN_PASSWORD:latest,CRON_TOKEN=CRON_TOKEN:latest"
 }
 for attempt in 1 2 3; do

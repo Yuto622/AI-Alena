@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
-import { paths } from "./config.mjs";
+import { paths, DATA_DIR } from "./config.mjs";
 import { parseFrontmatter, PAID_MARKER, markdownToBlocks } from "./article.mjs";
 
 // 一番安いモデル。品質を上げたいときは CLAUDE_MODEL=claude-sonnet-5-5 などに変える
@@ -19,8 +19,12 @@ function styleExample() {
   return file ? readIfExists(path.join(paths.articles, file)) : "";
 }
 
+// 週1回まとめる「これまでの学び」（learning.mjs が書く）
+const learnings = () => readIfExists(path.join(DATA_DIR, "learnings.md"));
+
 function systemPrompt() {
   const profile = readIfExists(paths.profile) || "（筆者の経歴は未入力）";
+  const learned = learnings();
   return `あなたは note（日本のブログサービス）に載せる記事の書き手です。筆者本人の名前で公開される記事を書きます。
 
 ## 筆者について（ここに書かれていることだけが筆者の経験です）
@@ -46,6 +50,7 @@ tags: [タグ1, タグ2, タグ3, タグ4]
 
 本文
 
+${learned ? `## これまでの実績からの学び（タイトルのつけ方・構成の参考にする）\n${learned}\n` : ""}
 ## 書き方の手本（構成と文体の参考。内容はまねしない）
 ${styleExample()}`;
 }
@@ -87,7 +92,7 @@ ${topic.notes ? `メモ：${topic.notes}\n` : ""}${topic.tags?.length ? `入れ�
 }
 
 // JSON の形を指定して答えさせる（短い判定・一覧づくり用）
-async function askJson(prompt, schema) {
+export async function askJson(prompt, schema) {
   const client = new Anthropic();
   const message = await client.messages.create({
     model: MODEL,
@@ -143,7 +148,7 @@ ${profile}
 - 有料（500円か980円）と無料（0円）を 2:1 くらいで混ぜる。有料は「そのまま使える手順やテンプレート」が書けるテーマにする
 - 筆者の経験がなくても、一般的な方法として正確に書けるテーマにする
 - 次のテーマと重ならないこと：${existing.join(" / ")}
-${bestTags.length ? `- よく売れているタグ：${bestTags.join("、")}。このタグに近いテーマを多めに\n` : ""}`, {
+${bestTags.length ? `- よく売れているタグ：${bestTags.join("、")}。このタグに近いテーマを多めに\n` : ""}${learnings() ? `\n## これまでの実績からの学び\n${learnings()}\n` : ""}`, {
     type: "object",
     properties: {
       topics: {

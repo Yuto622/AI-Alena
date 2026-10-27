@@ -1,7 +1,9 @@
 // 予約公開と自動生成。Cloud Scheduler から /cron/tick が1時間ごとに呼ばれる想定
 import path from "path";
 import { paths } from "./config.mjs";
-import { listArticles, loadArticle, updateArticleMeta, writeArticleSource } from "./article.mjs";
+import { listArticles, loadArticle, updateArticleMeta, writeArticleSource, readArticleSource } from "./article.mjs";
+import { getApps, chooseApp } from "./apps.mjs";
+import { updateLearnings } from "./learning.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
 import { getSettings, getTopics, saveTopics } from "./store.mjs";
@@ -31,7 +33,16 @@ export function nextFreeSlot(articles = listArticles()) {
   throw new Error("空いている公開枠がありません（設定の公開スケジュールを確認）");
 }
 
+// アプリが登録されていて、記事にまだ選ばれていなければ選んでおく
+async function ensureApp(name) {
+  const { meta, body } = readArticleSource(name);
+  if (meta.app || getApps().length === 0) return;
+  const app = await chooseApp({ title: meta.title, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags], body });
+  if (app) updateArticleMeta(name, { app });
+}
+
 export async function publishArticle(name, { mode = "publish", force = false } = {}) {
+  await ensureApp(name);
   const article = loadArticle(path.join(paths.articles, name));
   const result = await runNote({ account: article.account, article, mode, force });
   if (mode === "publish") updateArticleMeta(name, { status: "published", url: result.url });
@@ -75,6 +86,7 @@ export async function generateNext(topicId) {
     // 自動チェックで止めた記事は枠を空けておく（次の記事がその枠に入れるように）
     publish_at: review.ok ? slot.toISOString() : "",
     topic: topic.id,
+    app: (await chooseApp({ title: meta.title, tags: meta.tags || [], body })) || "",
     error: review.ok ? "" : `自動チェックで止めました：${review.problems.join(" / ")}`,
   }, body);
   const writtenAt = new Date().toISOString();
@@ -111,6 +123,12 @@ export async function tick(now = new Date()) {
         report.errors.push(`生成失敗: ${e.message}`);
       }
     }
+  }
+  // 週に1回、実績から学びをまとめ直す（中で1週間たったかを見ている）
+  try {
+    report.learnings = await updateLearnings(now);
+  } catch (e) {
+    report.errors.push(`学びの更新失敗: ${e.message}`);
   }
   return report;
 }
