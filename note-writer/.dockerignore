@@ -11,3 +11,6 @@ apps.json
 clicks.json
 learnings.md
 learnings.json
+x-log.json
+secrets.enc.json
+stats-import.json

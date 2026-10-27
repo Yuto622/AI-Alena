@@ -22,6 +22,12 @@ export const DEFAULT_SETTINGS = {
   minIntervalHours: 3,
   // 見出し画像を自動で作って載せる（ブラウザで描くので費用0円）
   headerImage: true,
+  // 1日1回、note のダッシュボードから閲覧数・販売数を取り込む
+  statsImport: true,
+  // X：公開したら紹介する／1日1回、過去の記事をもう一度紹介する（日本時間の何時以降か）
+  xOnPublish: true,
+  xDailyPromo: true,
+  xDailyHour: 12,
   // アプリ選びで、まだ試していないアプリを選ぶ割合（データ集め）
   exploreRate: 0.2,
   thumbnailFooter: "UCLA 在学生が書く 英語と海外大学のはなし",
@@ -54,9 +60,13 @@ export function addPublished(entry) {
 
 // 売上は note の管理画面の数字を月ごとに入力する（note に売上を取る API はない）
 export const getSales = () => readJson(paths.sales, []);
+// 空欄で渡された項目は、前の値を残す（販売数だけ・閲覧数だけを直せるように）
 export function upsertSales({ file, month, sales, views }) {
-  const rows = getSales().filter((r) => !(r.file === file && r.month === month));
-  rows.push({ file, month, sales: Number(sales) || 0, views: Number(views) || 0 });
+  const all = getSales();
+  const prev = all.find((r) => r.file === file && r.month === month) || {};
+  const pick = (v, old) => (v === undefined || v === null || v === "" ? old ?? 0 : Number(v) || 0);
+  const rows = all.filter((r) => !(r.file === file && r.month === month));
+  rows.push({ file, month, sales: pick(sales, prev.sales), views: pick(views, prev.views) });
   writeJson(paths.sales, rows);
 }
 

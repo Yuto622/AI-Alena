@@ -49,6 +49,7 @@
     <button data-tab="articles">記事</button>
     <button data-tab="topics">ネタ帳</button>
     <button data-tab="apps">アプリ</button>
+    <button data-tab="xtab">X</button>
     <button data-tab="logs">実行ログ</button>
     <button data-tab="settings">設定</button>
   </nav>
@@ -60,7 +61,9 @@
     <div class="card"><h3>公開予定</h3><div class="scroll"><table id="upcoming"></table></div>
       <div class="actions"><button class="btn" onclick="act('/api/tick', {}, '予約実行')">予約実行を今すぐ動かす</button>
       <button class="btn" onclick="act('/api/generate', {}, '次の記事を生成')">次の記事を生成</button></div></div>
-    <div class="card"><h3>記事ごとの売上（note の管理画面の数字を月ごとに入力）</h3>
+    <div class="card"><h3>記事ごとの売上</h3>
+      <p><small id="importInfo">毎日1回、note のダッシュボードから閲覧数・販売数を自動で取り込みます。取り込めなかった数字は手で直せます。</small></p>
+      <div class="actions" style="margin:0 0 8px"><button class="btn" onclick="act('/api/import-stats', {}, 'note から数字の取り込み')">今すぐ note から取り込む</button></div>
       <div class="scroll"><table id="perArticle"></table></div></div>
   </section>
 
@@ -125,6 +128,24 @@
     </div>
   </section>
 
+  <section id="xtab">
+    <div class="card"><h3>X（旧 Twitter）への自動投稿</h3>
+      <p id="xStatus"></p>
+      <p><small>記事を公開したらその紹介を1回、さらに1日1回、よく読まれた・売れた過去の記事をもう一度紹介します（同じ記事は14日あける）。投稿文は一番安い AI が書き、記事にないことは書きません。ON/OFF と時刻は「設定」で変えられます。</small></p>
+      <h4>API キー（X Developer Portal で作ったアプリの「Keys and tokens」）</h4>
+      <div class="row">
+        <label><small>API Key</small><input id="xKey" autocomplete="off"></label>
+        <label><small>API Key Secret</small><input id="xSecret" type="password" autocomplete="new-password"></label>
+        <label><small>Access Token</small><input id="xToken" autocomplete="off"></label>
+        <label><small>Access Token Secret</small><input id="xTokenSecret" type="password" autocomplete="new-password"></label>
+      </div>
+      <div class="actions"><button class="btn primary" onclick="saveX()">保存</button>
+        <button class="btn" onclick="act('/api/x/check', {}, 'X の接続確認')">接続確認（投稿はしない）</button></div>
+      <p><small>キーは暗号化して保存し、画面には表示しません。Access Token は「Read and write」の権限で作ってください。</small></p>
+    </div>
+    <div class="card"><h3>最近の投稿</h3><div class="scroll"><table id="xLog"></table></div></div>
+  </section>
+
   <section id="logs">
     <div class="card"><h3>公開の記録</h3><div class="scroll"><table id="pubLog"></table></div></div>
     <div class="card"><h3>ブラウザ操作の画面（直近20回）</h3><div id="runs"></div></div>
@@ -172,6 +193,10 @@
         <label><input type="checkbox" id="sHeader" style="width:auto"> 見出し画像を自動で作って載せる（費用0円）</label>
         <label><small>見出し画像の下に入れる一言</small><input id="sFooter"></label>
         <label><small>アプリを試しに選ぶ割合（0〜1）</small><input id="sExplore" type="number" step="0.05" min="0" max="1"></label>
+        <label><input type="checkbox" id="sStats" style="width:auto"> 毎日 note から閲覧数・販売数を取り込む</label>
+        <label><input type="checkbox" id="sXPub" style="width:auto"> 公開したら X で紹介する</label>
+        <label><input type="checkbox" id="sXDaily" style="width:auto"> 1日1回、過去の記事を X で再紹介する</label>
+        <label><small>再紹介する時刻（日本時間の何時以降）</small><input id="sXHour" type="number" min="0" max="23"></label>
       </div>
       <label><small>筆者について（生成する記事に「経験」として書いてよいのはここだけ）</small><textarea id="sProfile" style="min-height:200px"></textarea></label>
       <div class="actions"><button class="btn primary" onclick="saveSettings()">保存</button>
@@ -221,6 +246,12 @@ async function loadDash() {
   $("perArticle").innerHTML = "<tr><th>記事</th><th>価格</th><th>累計販売</th><th>累計売上</th><th>購入率</th><th>今月の販売数・閲覧数を入力</th></tr>" + d.perArticle.map((a) =>
     `<tr><td><a href="${esc(a.url)}" target="_blank">${esc(a.title)}</a></td><td>${a.price ? yen(a.price) : "無料"}</td><td>${a.sales}</td><td>${yen(a.revenue)}</td><td>${a.conversion == null ? "-" : (a.conversion * 100).toFixed(1) + "%"}</td>
      <td><input style="width:70px" id="s-${esc(a.name)}" type="number" placeholder="販売" value="${a.monthSales || ""}"> <input style="width:80px" id="v-${esc(a.name)}" type="number" placeholder="閲覧"> <button class="btn" onclick="saveSales('${esc(a.name)}','${d.month}')">保存</button></td></tr>`).join("");
+}
+async function loadImportInfo() {
+  const r = await api("/api/import-stats");
+  if (!r.at) return;
+  $("importInfo").textContent = `最後の取り込み：${jst(r.at)}（${r.updated ?? 0} 本更新／閲覧数 ${r.viewsError ? "失敗：" + r.viewsError : "OK"}／販売数 ${
+    r.salesError ? "失敗：" + r.salesError : r.salesFound ? r.salesFound + " 件" : "見つからず（手入力の数字を残しています）"}）`;
 }
 async function saveSales(name, month) {
   await api("/api/sales", "POST", { file:name, month, sales:$(`s-${name}`).value, views:$(`v-${name}`).value });
@@ -293,6 +324,19 @@ async function removeApp(id) {
   await api("/api/apps", "PUT", apps.filter((a) => a.id !== id)); loadApps();
 }
 
+async function loadX() {
+  const d = await api("/api/x");
+  $("xStatus").innerHTML = d.hasKeys ? "<b>キー設定済み</b>" : "<b>まだキーが設定されていません。</b>下で入れると自動投稿が始まります。";
+  $("xLog").innerHTML = "<tr><th>日時</th><th>種類</th><th>投稿</th></tr>" + d.log.map((l) =>
+    `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td><a href="https://x.com/i/web/status/${esc(l.id)}" target="_blank">${esc(l.text)}</a></td></tr>`).join("");
+}
+async function saveX() {
+  try {
+    await api("/api/x/keys", "PUT", { apiKey:$("xKey").value, apiSecret:$("xSecret").value, accessToken:$("xToken").value, accessSecret:$("xTokenSecret").value });
+    ["xKey","xSecret","xToken","xTokenSecret"].forEach((id) => $(id).value = ""); toast("保存しました。「接続確認」で試してください"); loadX();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+
 let topics = [];
 async function loadTopics() {
   topics = await api("/api/topics");
@@ -361,18 +405,21 @@ async function loadSettings() {
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
   $("sDaily").value = s.dailyGenerateLimit;
   $("sHeader").checked = s.headerImage; $("sFooter").value = s.thumbnailFooter; $("sExplore").value = s.exploreRate;
+  $("sStats").checked = s.statsImport; $("sXPub").checked = s.xOnPublish; $("sXDaily").checked = s.xDailyPromo; $("sXHour").value = s.xDailyHour;
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
   await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
     bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule,
+    statsImport:$("sStats").checked, xOnPublish:$("sXPub").checked, xDailyPromo:$("sXDaily").checked,
+    xDailyHour:Math.min(23, Math.max(0, Number($("sXHour").value) || 0)),
     headerImage:$("sHeader").checked, thumbnailFooter:$("sFooter").value, exploreRate:Math.min(1, Math.max(0, Number($("sExplore").value) || 0)), autoGenerate:$("sAutoGen").checked, autoApprove:$("sAutoApprove").checked, profile:$("sProfile").value });
   toast("保存しました"); load();
 }
 
 function load() {
   // 読み込みの失敗を画面に出す（何も出ないと原因がわからないため）
-  for (const [label, fn] of [["ダッシュボード", loadDash], ["記事", loadArticles], ["ネタ帳", loadTopics], ["アプリ", loadApps], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
+  for (const [label, fn] of [["ダッシュボード", loadDash], ["取り込み状況", loadImportInfo], ["記事", loadArticles], ["ネタ帳", loadTopics], ["アプリ", loadApps], ["X", loadX], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
     fn().catch((e) => toast(`${label}の読み込みに失敗：${e.message}`, 12000));
   }
 }

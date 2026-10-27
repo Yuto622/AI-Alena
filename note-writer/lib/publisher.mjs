@@ -205,12 +205,11 @@ export function assertPublishable(article, { force = false } = {}) {
   }
 }
 
-// mode: "check"（ログイン確認のみ）/ "draft"（下書き保存まで）/ "publish"（公開）
-export function runNote({ account = "default", article = null, mode = "publish", force = false }) {
+// ログイン済みのブラウザで fn(page, run) を動かす。同時に2つは動かさない
+export function withNote(account, label, fn, { onError } = {}) {
   return exclusive(async () => {
-    if (mode === "publish") assertPublishable(article, { force });
     const { chromium } = require("playwright");
-    const run = new Run(mode);
+    const run = new Run(label);
     const session = loadSession(account);
     const { email, password } = getCredentials(account);
     if (!session && (!email || !password)) {
@@ -228,21 +227,12 @@ export function runNote({ account = "default", article = null, mode = "publish",
     let page;
     try {
       page = await login(context, account, run);
-      if (mode === "check") return { ok: true, log: run.log, shots: run.dir };
-      const result = await post(page, article, mode === "draft", run);
-      addPublished({
-        name: path.basename(article.file),
-        title: article.title,
-        price: article.price,
-        account,
-        ...result,
-      });
-      run.info(result.draft ? `💾 下書き: ${result.url}` : `🎉 公開しました: ${result.url}`);
+      const result = await fn(page, run);
       return { ok: true, ...result, log: run.log, shots: run.dir };
     } catch (e) {
       if (page) {
         await run.shot(page, "error").catch(() => {});
-        await saveDraft(page, run).catch(() => {});
+        if (onError) await onError(page, run).catch(() => {});
       }
       e.log = run.log;
       e.shots = run.dir;
@@ -251,4 +241,24 @@ export function runNote({ account = "default", article = null, mode = "publish",
       await browser.close();
     }
   });
+}
+
+// mode: "check"（ログイン確認のみ）/ "draft"（下書き保存まで）/ "publish"（公開）
+export function runNote({ account = "default", article = null, mode = "publish", force = false }) {
+  if (mode === "publish") assertPublishable(article, { force });
+  if (mode === "check") return withNote(account, "check", async () => ({}));
+  return withNote(account, mode, async (page, run) => {
+    // 予約実行と手動実行が重なっても二重投稿しないよう、順番待ちのあとでもう一度確かめる
+    if (mode === "publish") assertPublishable(article, { force });
+    const result = await post(page, article, mode === "draft", run);
+    addPublished({
+      name: path.basename(article.file),
+      title: article.title,
+      price: article.price,
+      account,
+      ...result,
+    });
+    run.info(result.draft ? `💾 下書き: ${result.url}` : `🎉 公開しました: ${result.url}`);
+    return result;
+  }, { onError: saveDraft });
 }

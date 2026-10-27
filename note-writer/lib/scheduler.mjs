@@ -4,6 +4,8 @@ import { paths } from "./config.mjs";
 import { listArticles, loadArticle, updateArticleMeta, writeArticleSource, readArticleSource } from "./article.mjs";
 import { getApps, chooseApp } from "./apps.mjs";
 import { updateLearnings } from "./learning.mjs";
+import { importStatsDaily } from "./stats.mjs";
+import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./x.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
 import { getSettings, getTopics, saveTopics } from "./store.mjs";
@@ -45,7 +47,18 @@ export async function publishArticle(name, { mode = "publish", force = false } =
   await ensureApp(name);
   const article = loadArticle(path.join(paths.articles, name));
   const result = await runNote({ account: article.account, article, mode, force });
-  if (mode === "publish") updateArticleMeta(name, { status: "published", url: result.url });
+  if (mode === "publish") {
+    updateArticleMeta(name, { status: "published", url: result.url });
+    // 公開したら X で紹介する（失敗しても公開は成功のまま）
+    if (getSettings().xOnPublish && hasXKeys()) {
+      try {
+        const { meta, body } = readArticleSource(name);
+        result.x = await postArticle({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+      } catch (e) {
+        result.xError = e.message;
+      }
+    }
+  }
   return result;
 }
 
@@ -121,6 +134,26 @@ export async function tick(now = new Date()) {
         report.generated = await generateNext();
       } catch (e) {
         report.errors.push(`生成失敗: ${e.message}`);
+      }
+    }
+  }
+  // 1日1回、note のダッシュボードから閲覧数・販売数を取り込む
+  if (settings.statsImport) {
+    try {
+      report.stats = await importStatsDaily(now);
+    } catch (e) {
+      report.errors.push(`数字の取り込み失敗: ${e.message.split("\n")[0]}`);
+    }
+  }
+  // 1日1回、過去の記事を X でもう一度紹介する
+  if (shouldPostDaily(now)) {
+    const a = pickArticleToPromote(now);
+    if (a) {
+      try {
+        const { body } = readArticleSource(a.name);
+        report.x = await postArticle({ ...a, body }, { again: true });
+      } catch (e) {
+        report.errors.push(`X への投稿失敗: ${e.message}`);
       }
     }
   }

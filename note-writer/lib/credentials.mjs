@@ -75,6 +75,18 @@ export function setSessionCookies(account, cookieHeader) {
   return cookies.length;
 }
 
+// そのほかの秘密情報（X の API キーなど）も、同じ鍵で暗号化して保存する
+const SECRETS = path.join(DATA_DIR, "secrets.enc.json");
+export function saveSecret(name, value) {
+  const all = readJson(SECRETS, {});
+  all[name] = encrypt(JSON.stringify(value));
+  writeJson(SECRETS, all);
+}
+export function loadSecret(name) {
+  const blob = readJson(SECRETS, {})[name];
+  return blob ? JSON.parse(decrypt(blob)) : null;
+}
+
 // ログイン状態（Playwright の storageState）はパスワードと同じ扱いで、暗号化して保存する
 const sessionFile = (account) => path.join(paths.auth, `${account}.enc`);
 

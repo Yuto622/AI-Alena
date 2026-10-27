@@ -34,3 +34,6 @@ note-writer/apps.json
 note-writer/clicks.json
 note-writer/learnings.*
 note-writer/credentials.enc.json
+note-writer/x-log.json
+note-writer/secrets.enc.json
+note-writer/stats-import.json

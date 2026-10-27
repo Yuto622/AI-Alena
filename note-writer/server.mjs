@@ -12,6 +12,8 @@ import { listCredentials, setCredentials, setSessionCookies } from "./lib/creden
 import { getApps, saveApps, recordClick } from "./lib/apps.mjs";
 import { appPerformance, getLearnings, updateLearnings } from "./lib/learning.mjs";
 import { renderThumbnail } from "./lib/thumbnail.mjs";
+import { importStats, lastImport } from "./lib/stats.mjs";
+import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -96,6 +98,28 @@ app.post("/api/check-login", wrap(async (req) => {
   return { ...r, shots: path.relative(paths.out, r.shots) };
 }));
 app.post("/api/tick", wrap(() => tick()));
+app.post("/api/import-stats", wrap(async () => {
+  const r = await importStats();
+  return { ...r, shots: r.shots && path.relative(paths.out, r.shots) };
+}));
+app.get("/api/import-stats", wrap(() => lastImport()));
+
+app.get("/api/x", wrap(() => ({ hasKeys: hasXKeys(), log: getXLog().slice(-30).reverse() })));
+app.put("/api/x/keys", wrap((req) => {
+  setXKeys(req.body);
+  return { ok: true };
+}));
+app.post("/api/x/check", wrap(() => xWhoAmI()));
+// 投稿文の見本だけ作る（投稿しない）
+app.post("/api/x/preview", wrap(async (req) => {
+  const { meta, body } = readArticleSource(req.body.name);
+  return { text: await composePost({ ...meta, body, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] }) };
+}));
+app.post("/api/x/post", wrap(async (req) => {
+  const { meta, body } = readArticleSource(req.body.name);
+  if (!meta.url) throw new Error("まだ note に公開していない記事です");
+  return postArticle({ ...meta, name: req.body.name, body, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] }, { again: true });
+}));
 app.post("/api/generate", wrap((req) => generateNext(req.body.topicId)));
 
 app.get("/api/topics", wrap(() => getTopics()));
