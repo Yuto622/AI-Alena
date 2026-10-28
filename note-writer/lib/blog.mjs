@@ -120,7 +120,7 @@ ${affiliates.map((a, i) => `${i}：${a.name}／${a.fit || ""}`).join("\n") || "�
 ${free.slice(0, 12000)}`, SCHEMA);
 
   let slug = String(r.slug || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "post";
-  if (!SLUG.test(slug)) slug = "post";
+  if (!SLUG.test(slug) || slug === "about") slug = slug === "about" ? "about-post" : "post";
   for (let i = 2; getBlogPost(slug); i++) slug = `${slug.replace(/-\d+$/, "")}-${i}`;
   const picked = (r.affiliates || [])
     .filter((x) => affiliates[x.index] && /^https:\/\//.test(affiliates[x.index].url))
@@ -306,7 +306,7 @@ ${script ? '<div class="progress"></div>' : ""}
 </div></header>
 ${body}
 <footer><div class="wrap">
-<span>© ${new Date().getFullYear()} 合同会社 U-Speak Lab ／ ${esc(s.blogTitle)}</span>
+<span>© ${new Date().getFullYear()} 合同会社 U-Speak Lab ／ ${esc(s.blogTitle)} ／ <a href="${esc(base())}/blog/about">運営者情報・プライバシーポリシー</a></span>
 <span style="display:flex;gap:10px;flex-wrap:wrap">${noteHome ? `<a class="chip" href="${esc(noteHome)}" target="_blank" rel="noopener">note</a>` : ""}${lineUrl ? `<a class="chip" href="${esc(lineUrl)}" target="_blank" rel="noopener">LINE で受け取る</a>` : ""}</span>
 </div></footer>
 ${script ? SCRIPT : ""}
@@ -407,8 +407,76 @@ ${first ? cardHtml(first, { feature: true }) + `<div class="cards">${rest.map((p
   });
 }
 
+// 運営者情報・広告の方針・プライバシーポリシー（アフィリエイトの審査で見られるページ）
+const ABOUT = `## 運営者情報
+
+- 運営：合同会社 U-Speak Lab
+- 会社のホームページ：https://uspeaklab.org
+- お問い合わせ：info@uspeaklab.com
+- 執筆：UCLA（カリフォルニア大学ロサンゼルス校）に在学する、合同会社 U-Speak Lab のメンバー
+
+## このブログについて
+
+海外大学での勉強、子どもの英語と英検、AI を使った仕事の自動化について、自分の経験から書いています。同じ内容を note でも公開しており、このブログでは検索して読む人向けに書き直して載せています。
+
+## 広告・アフィリエイトについて
+
+このブログは、アフィリエイトプログラム（Amazon アソシエイト、もしもアフィリエイト、A8.net など）を利用しています。記事の中で紹介した商品のリンクから購入や申し込みがあると、運営者に報酬が支払われることがあります。
+
+- アフィリエイトリンクを含む記事には、記事の冒頭に「PR」と表示します
+- 紹介する商品は、記事の内容に合うものだけを選びます。報酬の有無や額によって、記事の内容や評価を変えることはありません
+- Amazon のアソシエイトとして、当サイトは適格販売により収入を得ています
+
+また、運営者が提供する英語学習アプリ・教材・サービスを紹介することがあります。
+
+## プライバシーポリシー
+
+### 取得する情報
+
+- このブログ自体は、アクセス解析ツールや、閲覧者を追跡するための Cookie を使っていません
+- 記事の中の一部のリンクについて、どの記事から何回押されたかを数えています。数えるのは回数だけで、押した人を特定する情報は保存しません
+- 文字の表示に Google Fonts を使っているため、閲覧時に Google のサーバーへ接続します
+
+### 第三者による Cookie の利用
+
+アフィリエイトリンクを押すと、リンク先の事業者（Amazon、楽天、もしもアフィリエイト、A8.net など）が、成果を確認するために Cookie を使うことがあります。これらの事業者による情報の扱いは、各社のプライバシーポリシーに従います。Cookie はブラウザの設定で無効にできます。
+
+### お問い合わせで受け取った情報
+
+お問い合わせでいただいたメールアドレスなどは、返信のためだけに使い、法令に基づく場合を除いて第三者に提供しません。
+
+## 免責事項
+
+記事の内容は、書いた時点の筆者の経験と調べた情報に基づいています。できるだけ正確に書くよう努めていますが、内容の正確さや最新であることを保証するものではありません。記事の情報を使って生じた損害について、運営者は責任を負いません。商品やサービスの最新の情報は、各社の公式サイトで確認してください。
+
+## 著作権
+
+このブログの文章・画像の著作権は、合同会社 U-Speak Lab に帰属します。引用する場合は、出典としてこのブログの記事へのリンクを記載してください。
+
+## 改定
+
+この内容は、必要に応じて予告なく改定することがあります。
+
+制定：2026年10月29日`;
+
+export function renderAbout() {
+  const s = getSettings();
+  const { html, toc } = withToc(markdownToBlocks(ABOUT).join("\n"));
+  return layout({
+    title: `運営者情報・プライバシーポリシー｜${s.blogTitle}`,
+    description: `${s.blogTitle}の運営者情報、広告・アフィリエイトの方針、プライバシーポリシー、免責事項です。`,
+    canonical: `${base()}/blog/about`,
+    tags: topTags(getBlogPosts()),
+    script: true,
+    body: `<section class="wrap hero" style="padding-bottom:24px"><span class="eyebrow"><b></b>ABOUT</span>
+<h1 style="font-size:clamp(30px,5vw,52px)">運営者情報・<span class="grad">プライバシーポリシー</span></h1></section>
+<div class="wrap layout"><main><article class="prose">${html}</article></main>
+<aside class="toc"><b>CONTENTS</b>${toc.map((t, i) => `<a href="#s${i + 1}">${t}</a>`).join("")}</aside></div>`,
+  });
+}
+
 export function sitemap() {
-  const urls = [`${base()}/blog`, ...getBlogPosts().map((p) => `${base()}/blog/${p.slug}`)];
+  const urls = [`${base()}/blog`, `${base()}/blog/about`, ...getBlogPosts().map((p) => `${base()}/blog/${p.slug}`)];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((u) => `<url><loc>${esc(u)}</loc></url>`).join("\n")}
