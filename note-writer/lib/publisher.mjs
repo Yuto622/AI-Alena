@@ -161,9 +161,16 @@ async function uploadHeaderImage(page, article, run) {
       await input.setInputFiles(file);
     }
     // 切り抜きの確認画面が出たら確定する
-    const ok = await first(page, ['button:has-text("保存")', 'button:has-text("適用")', 'button:has-text("完了")', 'button:has-text("決定")'], 8000).catch(() => null);
-    if (ok) await ok.click();
-    await page.waitForTimeout(2500);
+    // 「保存」だけで探すと画面上部の「下書き保存」を押してしまうので、確認画面の中のボタンを文字の完全一致で探す
+    const ok = await first(page, [
+      '[role="dialog"] button:text-is("保存")', '[role="dialog"] button:text-is("適用")', '[role="dialog"] button:text-is("完了")',
+      '[role="dialog"] button:text-is("決定")', 'button:text-is("保存")', 'button:text-is("適用")', 'button:text-is("完了")',
+    ], 8000).catch(() => null);
+    if (ok) {
+      await ok.click();
+      await page.locator('[role="dialog"]').first().waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+    }
+    await page.waitForTimeout(3000);
     await run.shot(page, "header-image");
     run.info("🖼️ 見出し画像を載せました");
   } catch (e) {
@@ -237,11 +244,29 @@ async function post(page, article, draftOnly, run) {
   await (await first(page, ['button:has-text("投稿する")', 'button:has-text("更新する")'])).click();
   // 公開すると、記事のページか「おすすめ設定」（like_reaction_setting）などの画面に移る。
   // 押す前と違う URL になり、編集画面を離れたら公開済みとみなす
-  await page.waitForURL((u) => u.href !== before && (/\/n\/n[0-9a-z]+/.test(u.pathname) || !u.hostname.startsWith("editor.")),
-    { timeout: 45000 });
+  // 画面が変わらないまま公開されることもあるので、note に記事の状態も聞いて確かめる
+  const moved = await page.waitForURL((u) => u.href !== before && (/\/n\/n[0-9a-z]+/.test(u.pathname) || !u.hostname.startsWith("editor.")),
+    { timeout: 45000 }).then(() => true, () => false);
+  if (!moved && !(await isPublished(page, key))) {
+    throw new Error("「投稿する」を押したあと、公開されたことを確かめられませんでした。note で記事が出ていないか確認してください（出ていたら、状態を「公開済み」にして URL を入れる）");
+  }
+  if (!moved) run.info("画面は変わりませんでしたが、note 上で公開済みになっていることを確かめました");
   await page.waitForTimeout(1500);
   await run.shot(page, "published");
   return { url: await publicUrl(page, key), draft: false };
+}
+
+// note に記事の状態を聞く。公開済みなら true
+async function isPublished(page, key) {
+  if (!key) return false;
+  for (let i = 0; i < 6; i++) {
+    // ブラウザと同じログイン状態で聞く（編集画面は別のドメインなので、ページの中からは聞かない）
+    const status = await page.context().request.get(`https://note.com/api/v3/notes/${key}`)
+      .then(async (r) => (r.ok() ? (await r.json())?.data?.status || null : null), () => null);
+    if (status === "published") return true;
+    await page.waitForTimeout(5000);
+  }
+  return false;
 }
 
 // 公開した記事の URL。記事のページにいればそれを使い、そうでなければ記事の番号から調べる
