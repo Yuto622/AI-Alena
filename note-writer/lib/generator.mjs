@@ -8,6 +8,13 @@ import { parseFrontmatter, PAID_MARKER, markdownToBlocks } from "./article.mjs";
 // 一番安いモデル。品質を上げたいときは CLAUDE_MODEL=claude-sonnet-5-5 などに変える
 const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-5-5";
 
+// API キーの前後の空白・改行は取り除く（Secret Manager に改行付きで入っていると「Invalid bearer token」になる）
+function anthropic() {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
+  if (!apiKey) throw new Error("Anthropic の API キーが設定されていません");
+  return new Anthropic({ apiKey });
+}
+
 function readIfExists(file) {
   return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 }
@@ -67,7 +74,7 @@ function validate(text, topic) {
 
 // topic: { title, price, tags?, notes? }
 export async function generateArticle(topic) {
-  const client = new Anthropic();
+  const client = anthropic();
   const kind = topic.price > 0 ? `有料記事（${topic.price}円）` : "無料記事";
   const userMessage = `次のテーマで${kind}を1本書いてください。
 
@@ -93,7 +100,7 @@ ${topic.notes ? `メモ：${topic.notes}\n` : ""}${topic.tags?.length ? `入れ�
 
 // JSON の形を指定して答えさせる（短い判定・一覧づくり用）
 export async function askJson(prompt, schema) {
-  const client = new Anthropic();
+  const client = anthropic();
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: 16000,
