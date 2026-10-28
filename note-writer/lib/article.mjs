@@ -35,7 +35,9 @@ function inline(text) {
     .replace(/"/g, "&quot;")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2">$1</a>')
+    // そのまま書かれた URL もリンクにする（[文字](URL) の中の URL は除く）
+    .replace(/(?<!href=")(?<!">)\bhttps?:\/\/[A-Za-z0-9\-._~:/?#@!$&;%=+*,]+[A-Za-z0-9\-_~/#=&;%+*]/g, '<a href="$&">$&</a>');
 }
 
 // note のエディタが受け付ける範囲（見出し・段落・箇条書き・引用・コード）だけを変換する
