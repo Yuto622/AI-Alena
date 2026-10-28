@@ -166,6 +166,12 @@ async function post(page, article, draftOnly, run) {
 
   if (article.price > 0) {
     await (await first(page, ['label:has-text("有料")', 'button:has-text("有料")'])).click();
+    // 有料記事を初めて売るときは、note から本人情報（法人名・住所など）の登録を求められる。人が一度だけ入れる必要がある
+    await page.waitForTimeout(1500);
+    if (await page.locator('text=本人情報').first().isVisible().catch(() => false)) {
+      await run.shot(page, "identity-required");
+      throw new Error("note で有料記事を売るための「本人情報の登録」が済んでいません。note の画面で一度登録してから、記事を「公開OK」に戻してください");
+    }
     const priceInput = await first(page, ['input[name="price"]', 'input[type="number"]', 'input[placeholder*="価格"]']);
     await priceInput.fill(String(article.price));
     await run.shot(page, "price-set");

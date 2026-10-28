@@ -33,9 +33,15 @@ $account = gcloud auth list --filter="status:ACTIVE" --format="value(account)" 2
 if (-not $account) { gcloud auth login }
 
 # 3. 名前で渡されたら ID に変換
-$id = gcloud projects list --filter="projectId:$Project" --format="value(projectId)" 2>$null
-if (-not $id) { $id = gcloud projects list --filter="name:'$Project'" --format="value(projectId)" 2>$null }
-if (-not $id) { throw "プロジェクト「$Project」が見つかりません。gcloud projects list で確認してください。" }
+# プロジェクト ID の形（英小文字・数字・ハイフン）ならそのまま使う。名前なら ID を調べる
+if ($Project -match '^[a-z][a-z0-9-]{4,28}[a-z0-9]$') {
+  $id = $Project
+} else {
+  $id = gcloud projects list --filter="name:'$Project'" --format="value(projectId)"
+  if (-not $id) {
+    throw "プロジェクト「$Project」が見つかりません。gcloud auth login でログインし直すか、プロジェクト ID（例：top-footing-512918-n0）を直接指定してください。"
+  }
+}
 $id = ($id -split "`n")[0].Trim()
 Write-Host "プロジェクト ID: $id"
 

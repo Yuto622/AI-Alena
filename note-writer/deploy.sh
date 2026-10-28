@@ -116,11 +116,12 @@ CRON_TOKEN="$(gcloud secrets versions access latest --secret=CRON_TOKEN)"
 
 # 予約実行（毎時5分。期限の来た記事の公開と、予約が足りないときの生成）
 JOB_ARGS=(--location "$REGION" --schedule "5 * * * *" --time-zone "Asia/Tokyo"
-  --uri "$URL/cron/tick" --http-method POST --headers "x-cron-token=$CRON_TOKEN" --attempt-deadline 900s)
+  --uri "$URL/cron/tick" --http-method POST --attempt-deadline 900s)
+# ヘッダーの指定は、作るときは --headers、更新するときは --update-headers
 if gcloud scheduler jobs describe note-writer-tick --location "$REGION" >/dev/null 2>&1; then
-  gcloud scheduler jobs update http note-writer-tick "${JOB_ARGS[@]}" >/dev/null
+  gcloud scheduler jobs update http note-writer-tick "${JOB_ARGS[@]}" --update-headers "x-cron-token=$CRON_TOKEN" >/dev/null
 else
-  gcloud scheduler jobs create http note-writer-tick "${JOB_ARGS[@]}" >/dev/null
+  gcloud scheduler jobs create http note-writer-tick "${JOB_ARGS[@]}" --headers "x-cron-token=$CRON_TOKEN" >/dev/null
 fi
 
 # 古いイメージを自動で消す（最新1つだけ残す）
