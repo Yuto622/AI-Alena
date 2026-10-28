@@ -29,7 +29,16 @@ async function first(page, selectors, timeout = 10000) {
     }
     await page.waitForTimeout(300);
   }
-  throw new Error(`見つかりません: ${selectors.join(" | ")}`);
+  // note の画面が想定と違うとき、直すための手がかりとして、今見えている入力欄とボタンを一緒に出す
+  const seen = await page.evaluate(() => {
+    const vis = (e) => e.offsetParent !== null;
+    const inputs = [...document.querySelectorAll("input, textarea, select")].filter(vis).slice(0, 10).map((e) =>
+      `${e.tagName.toLowerCase()}[type=${e.type || ""} name=${e.name || ""} placeholder=${e.placeholder || ""} inputmode=${e.inputMode || ""} aria=${e.getAttribute("aria-label") || ""}]`);
+    const buttons = [...document.querySelectorAll("button, [role=button], label")].filter(vis)
+      .map((e) => e.innerText.trim().replace(/\s+/g, " ")).filter((t) => t && t.length < 20).slice(0, 15);
+    return `入力欄: ${inputs.join(" ") || "なし"} ／ ボタン: ${buttons.join("、")}`;
+  }).catch(() => "");
+  throw new Error(`見つかりません: ${selectors.join(" | ")}${seen ? `（画面にあったもの → ${seen}）` : ""}`);
 }
 
 class Run {
@@ -172,7 +181,11 @@ async function post(page, article, draftOnly, run) {
       await run.shot(page, "identity-required");
       throw new Error("note で有料記事を売るための「本人情報の登録」が済んでいません。note の画面で一度登録してから、記事を「公開OK」に戻してください");
     }
-    const priceInput = await first(page, ['input[name="price"]', 'input[type="number"]', 'input[placeholder*="価格"]']);
+    const priceInput = await first(page, [
+      'input[name="price"]', 'input[type="number"]', 'input[placeholder*="価格"]',
+      'input[inputmode="numeric"]', 'input[inputmode="decimal"]', 'input[type="tel"]', 'input[aria-label*="価格"]',
+      'input:near(:text("円"))', 'input:near(:text("価格"))',
+    ]);
     await priceInput.fill(String(article.price));
     await run.shot(page, "price-set");
 
