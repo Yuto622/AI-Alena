@@ -7,6 +7,9 @@ import { updateLearnings } from "./learning.mjs";
 import { importStatsDaily } from "./stats.mjs";
 import { shouldScoutTrends, scoutTrends } from "./trends.mjs";
 import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./x.mjs";
+import { hasThreadsToken, postArticleToThreads, shouldPostThreadsDaily, getThreadsLog } from "./threads.mjs";
+import { shouldSendDigest, sendDigest } from "./line.mjs";
+import { nextArticleForBlog, writeBlogPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
 import { getSettings, getTopics, saveTopics } from "./store.mjs";
@@ -66,6 +69,14 @@ export async function publishArticle(name, { mode = "publish", force = false } =
         result.x = await postArticle({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
       } catch (e) {
         result.xError = e.message;
+      }
+    }
+    if (getSettings().threadsOnPublish && hasThreadsToken()) {
+      try {
+        const { meta, body } = readArticleSource(name);
+        result.threads = await postArticleToThreads({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+      } catch (e) {
+        result.threadsError = e.message;
       }
     }
   }
@@ -195,6 +206,35 @@ export async function tick(now = new Date()) {
       } catch (e) {
         report.errors.push(`X への投稿失敗: ${e.message}`);
       }
+    }
+  }
+  // 1日1回、過去の記事を Threads でもう一度紹介する
+  if (shouldPostThreadsDaily(now)) {
+    const a = pickArticleToPromote(now, getThreadsLog());
+    if (a) {
+      try {
+        const { body } = readArticleSource(a.name);
+        report.threads = await postArticleToThreads({ ...a, body }, { again: true });
+      } catch (e) {
+        report.errors.push(`Threads への投稿失敗: ${e.message}`);
+      }
+    }
+  }
+  // 週1回、LINE の友だちに「今週の記事」を送る
+  if (shouldSendDigest(now)) {
+    try {
+      report.line = await sendDigest(now);
+    } catch (e) {
+      report.errors.push(`LINE の配信失敗: ${e.message}`);
+    }
+  }
+  // 公開済みでまだブログにしていない記事を、1回に1本ずつブログにする
+  const forBlog = nextArticleForBlog();
+  if (forBlog) {
+    try {
+      report.blog = await writeBlogPost(forBlog.name);
+    } catch (e) {
+      report.errors.push(`ブログの作成失敗: ${e.message}`);
     }
   }
   // 週に1回、実績から学びをまとめ直す（中で1週間たったかを見ている）

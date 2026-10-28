@@ -66,10 +66,13 @@ export async function xWhoAmI() {
 }
 
 // 記事の紹介文を、一番安いモデルで作る（URL は後ろに付ける）
-export async function composePost(article, { again = false } = {}) {
+// platform: "threads" なら Threads 向けに少し長め（500文字まで投稿できる）
+export async function composePost(article, { again = false, platform = "x" } = {}) {
   const { askJson } = await import("./generator.mjs");
-  const { text } = await askJson(`X（旧 Twitter）に、note 記事の紹介を1つ書いてください。
-- 日本語で全角90文字以内（URL は別で付けるので書かない）
+  const threads = platform === "threads";
+  const limit = threads ? 200 : 90;
+  const { text } = await askJson(`${threads ? "Threads" : "X（旧 Twitter）"}に、note 記事の紹介を1つ書いてください。
+- 日本語で全角${limit}文字以内（URL は別で付けるので書かない）${threads ? "\n- 2〜4行に改行して読みやすく。最後の行で、記事を読むと何が手に入るかを書く" : ""}
 - 1行目で「誰の、どんな悩みが解決するか」をはっきり書く。煽りすぎない
 - 記事にないこと・筆者の経験にないことは書かない
 - ハッシュタグは最後に1〜2個まで
@@ -84,7 +87,7 @@ ${again ? "- 以前にも紹介した記事なので、前回とは違う切り�
     required: ["text"],
     additionalProperties: false,
   });
-  return text.trim().slice(0, 110);
+  return text.trim().slice(0, limit + 20);
 }
 
 export async function postArticle(article, { again = false } = {}) {
@@ -97,9 +100,9 @@ export async function postArticle(article, { again = false } = {}) {
   return { id: data.id, text };
 }
 
-// 1日1回の再紹介：14日以内に紹介していない公開済みの記事から、売上→閲覧数の多い順に選ぶ
-export function pickArticleToPromote(now = new Date()) {
-  const recent = new Set(getXLog().filter((l) => now - Date.parse(l.at) < 14 * 864e5).map((l) => l.name));
+// 1日1回の再紹介：14日以内に紹介していない（log はどの SNS の記録で見るか）公開済みの記事から、売上→閲覧数の多い順に選ぶ
+export function pickArticleToPromote(now = new Date(), log = getXLog()) {
+  const recent = new Set(log.filter((l) => now - Date.parse(l.at) < 14 * 864e5).map((l) => l.name));
   const sales = getSales();
   const score = (name) => sales.filter((s) => s.file === name).reduce((n, s) => n + s.sales * 1000 + s.views, 0);
   return listArticles()

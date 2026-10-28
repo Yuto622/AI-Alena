@@ -40,6 +40,26 @@ export const DEFAULT_SETTINGS = {
   // アプリ選びで、まだ試していないアプリを選ぶ割合（データ集め）
   exploreRate: 0.2,
   thumbnailFooter: "UCLA 在学生が書く 英語のはなし",
+  // 公開するとき note のマガジン・メンバーシップに入れる（{ name, when: "paid" | "free" | "all" }。名前は note で作ったものと同じに）
+  collections: [],
+  // 記事の最後に、同じタグの過去の記事を「あわせて読みたい」として付ける
+  relatedLinks: true,
+  // Threads：公開したら紹介する／1日1回、過去の記事をもう一度紹介する（日本時間の何時以降か）
+  threadsOnPublish: true,
+  threadsDailyPromo: true,
+  threadsDailyHour: 19,
+  // LINE：友だち追加の URL（記事の最後に案内を付ける）と、週1回の「今週の記事」配信（曜日 0=日曜、日本時間の何時以降か）
+  lineAddUrl: "",
+  lineDigest: true,
+  lineDigestDow: 0,
+  lineDigestHour: 10,
+  // ブログ：公開した note 記事を検索向けに書き直して、このサーバーの /blog に載せる
+  blogEnabled: true,
+  blogTitle: "UCLA 在学生が書く 英語のはなし",
+  // アフィリエイト：{ name, url, fit }（fit は「どんな記事に合うか」）。合う記事にだけ AI が入れる
+  affiliates: [],
+  // Google Search Console の「HTML タグ」の content の値
+  googleVerification: "",
 };
 
 export function readJson(file, fallback) {

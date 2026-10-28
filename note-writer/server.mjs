@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import express from "express";
-import { APP_DIR, paths, seedDataDir } from "./lib/config.mjs";
+import { APP_DIR, DATA_DIR, paths, seedDataDir } from "./lib/config.mjs";
 import { listArticles, readArticleSource, writeArticleSource, articlePath } from "./lib/article.mjs";
 import { runNote } from "./lib/publisher.mjs";
 import { tick, publishArticle, generateNext, nextFreeSlot } from "./lib/scheduler.mjs";
@@ -15,6 +15,9 @@ import { renderThumbnail } from "./lib/thumbnail.mjs";
 import { importStats, lastImport } from "./lib/stats.mjs";
 import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
+import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
+import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
+import { getBlogPosts, getBlogPost, renderPost, renderIndex, sitemap, robots, nextArticleForBlog, writeBlogPost } from "./lib/blog.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -51,6 +54,16 @@ app.get("/go/:app", (req, res) => {
   }
   res.redirect(302, toSite ? target.siteUrl : target.url);
 });
+
+// ブログ（誰でも読める。検索エンジン向けの sitemap.xml と robots.txt も）
+app.get("/blog", (_req, res) => res.type("html").send(renderIndex()));
+app.get("/blog/:slug", (req, res) => {
+  const post = getBlogPost(req.params.slug);
+  if (!post) return res.status(404).type("html").send(renderIndex());
+  res.type("html").send(renderPost(post));
+});
+app.get("/sitemap.xml", (_req, res) => res.type("application/xml").send(sitemap()));
+app.get("/robots.txt", (_req, res) => res.type("text/plain").send(robots()));
 
 // ここから下は管理画面（Basic 認証）
 app.use((req, res, next) => {
@@ -128,6 +141,27 @@ app.post("/api/x/post", wrap(async (req) => {
   const { meta, body } = readArticleSource(req.body.name);
   if (!meta.url) throw new Error("まだ note に公開していない記事です");
   return postArticle({ ...meta, name: req.body.name, body, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] }, { again: true });
+}));
+// Threads・LINE・ブログ
+app.get("/api/social", wrap(() => ({
+  threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
+  line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
+  blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: process.env.PUBLIC_URL || "" },
+})));
+app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
+app.post("/api/threads/check", wrap(() => threadsWhoAmI()));
+app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
+app.post("/api/line/check", wrap(() => lineWhoAmI()));
+app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));
+app.post("/api/blog/write", wrap(async () => {
+  const next = nextArticleForBlog();
+  if (!next) throw new Error("ブログにしていない公開済みの記事はありません（ブログが OFF のときも）");
+  return writeBlogPost(next.name);
+}));
+app.delete("/api/blog/:slug", wrap((req) => {
+  if (!getBlogPost(req.params.slug)) throw new Error("見つかりません");
+  fs.rmSync(path.join(DATA_DIR, "blog", `${req.params.slug}.json`));
+  return { ok: true };
 }));
 app.post("/api/generate", wrap((req) => generateNext(req.body.topicId)));
 

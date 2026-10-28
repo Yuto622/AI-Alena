@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { paths } from "./config.mjs";
 import { appCtaMarkdown } from "./apps.mjs";
+import { getSettings } from "./store.mjs";
 
 export const PAID_MARKER = "<!-- paid -->";
 
@@ -31,6 +32,7 @@ function inline(text) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2">$1</a>');
@@ -137,6 +139,20 @@ export function listArticles() {
     .sort((a, b) => (a.publish_at || "9999").localeCompare(b.publish_at || "9999"));
 }
 
+// 同じタグの、公開済みの過去の記事（共通のタグが多い順に3本）を「あわせて読みたい」にする
+export function relatedMarkdown(name, tags, { limit = 3 } = {}) {
+  if (!getSettings().relatedLinks) return "";
+  const mine = new Set(Array.isArray(tags) ? tags : tags ? [tags] : []);
+  const picks = listArticles()
+    .filter((a) => a.name !== name && a.status === "published" && /^https:\/\//.test(a.url))
+    .map((a) => ({ a, score: a.tags.filter((t) => mine.has(t)).length }))
+    .filter((x) => x.score > 0)
+    .sort((x, y) => y.score - x.score || (y.a.publish_at || "").localeCompare(x.a.publish_at || ""))
+    .slice(0, limit);
+  if (!picks.length) return "";
+  return `### あわせて読みたい\n\n${picks.map(({ a }) => `- [${a.title.replace(/[[\]]/g, "")}](${a.url})`).join("\n")}\n`;
+}
+
 export function loadArticle(file) {
   const { meta, body } = parseFrontmatter(fs.readFileSync(file, "utf8"));
   if (!meta.title) throw new Error(`${file}: title がありません`);
@@ -156,12 +172,18 @@ export function loadArticle(file) {
   if (meta.app && meta.app !== "none") {
     (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(appCtaMarkdown(meta.app, path.basename(file))));
   }
+  const related = relatedMarkdown(path.basename(file), meta.tags);
+  if (related) (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(related));
   const ctaName = meta.cta || (fs.existsSync(path.join(paths.cta, "default.md")) ? "default" : "");
   if (ctaName && ctaName !== "none") {
     const ctaFile = path.join(paths.cta, `${ctaName}.md`);
     const cta = fs.readFileSync(ctaFile, "utf8");
     if (cta.includes("{{")) throw new Error(`${ctaFile}: 未設定の {{...}} が残っています`);
     (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(cta));
+  }
+  const lineUrl = getSettings().lineAddUrl;
+  if (lineUrl && meta.cta !== "none") {
+    (paid === undefined ? freeBlocks : paidBlocks).push(...markdownToBlocks(`**▶ [新しい記事のお知らせを LINE で受け取る（週1回）](${lineUrl})**`));
   }
   return {
     file,

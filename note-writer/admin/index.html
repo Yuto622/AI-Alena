@@ -50,6 +50,7 @@
     <button data-tab="topics">ネタ帳</button>
     <button data-tab="trends">話題枠</button>
     <button data-tab="apps">アプリ</button>
+    <button data-tab="social">SNS・LINE・ブログ</button>
     <button data-tab="xtab">X</button>
     <button data-tab="logs">実行ログ</button>
     <button data-tab="settings">設定</button>
@@ -152,6 +153,73 @@
     <div class="card"><h3>これまでの学び（週1回、実績から自動でまとめ直す）</h3>
       <pre id="learnings" style="white-space:pre-wrap;font:inherit"></pre>
       <div class="actions"><button class="btn" onclick="act('/api/learnings', {}, '学びのまとめ直し')">今すぐまとめ直す</button></div>
+    </div>
+  </section>
+
+  <section id="social">
+    <div class="card"><h3>note のマガジン・メンバーシップに自動で入れる</h3>
+      <p><small>先に note で、マガジン（またはメンバーシップのプラン）を作っておきます。公開するとき、名前の行の「追加」を自動で押します。1行に1つ：「paid 名前」（有料記事だけ）／「free 名前」（無料記事だけ）／「all 名前」（全部）。名前は note と一字一句同じに。</small></p>
+      <textarea id="cCollections" style="min-height:70px" placeholder="paid 海外大学の勉強法まとめ&#10;all U-Speak メンバーシップ"></textarea>
+      <label><input type="checkbox" id="cRelated" style="width:auto"> 記事の最後に「あわせて読みたい」（同じタグの過去の記事3本）を付ける</label>
+      <div class="actions"><button class="btn primary" onclick="saveSocial()">保存</button></div>
+    </div>
+
+    <div class="card"><h3>Threads への自動投稿（無料）</h3>
+      <p id="thStatus"></p>
+      <p><small>公開したら紹介を1回、さらに1日1回、よく読まれた・売れた過去の記事をもう一度紹介します（同じ記事は14日あける）。</small></p>
+      <details><summary>アクセストークンの取り方（初回だけ・15分）</summary><ol>
+        <li><a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers</a> にログイン →「アプリを作成」→ ユースケースで「<b>Threads API にアクセス</b>」を選ぶ</li>
+        <li>アプリの「ユースケース」→ Threads API →「アクセス許可」で <b>threads_basic</b> と <b>threads_content_publish</b> を追加</li>
+        <li>「アプリの役割」→「役割」→「Threads テスター」に自分の Threads アカウントを追加し、Threads アプリの「設定 → アカウント → ウェブサイトのアクセス許可 → 招待」で承認</li>
+        <li>ユースケースの「設定」にある「<b>ユーザートークン生成ツール</b>」で自分のアカウントのトークンを作り、下に貼る（審査は不要です。自分のアカウントにだけ投稿するため）</li>
+      </ol><small>トークンは60日で切れますが、このシステムが7日ごとに自動で延長します。</small></details>
+      <div class="row"><label><small>アクセストークン</small><input id="thToken" type="password" autocomplete="new-password"></label></div>
+      <div class="row">
+        <label><input type="checkbox" id="cThPub" style="width:auto"> 公開したら Threads で紹介する</label>
+        <label><input type="checkbox" id="cThDaily" style="width:auto"> 1日1回、過去の記事を再紹介する</label>
+        <label><small>再紹介する時刻（日本時間の何時以降）</small><input id="cThHour" type="number" min="0" max="23"></label>
+      </div>
+      <div class="actions"><button class="btn primary" onclick="saveThreads()">保存</button>
+        <button class="btn" onclick="act('/api/threads/check', {}, 'Threads の接続確認')">接続確認（投稿はしない）</button></div>
+      <div class="scroll"><table id="thLog"></table></div>
+    </div>
+
+    <div class="card"><h3>LINE で「今週の記事」を配信（無料プランは月200通）</h3>
+      <p id="lnStatus"></p>
+      <details><summary>設定のしかた（初回だけ・10分）</summary><ol>
+        <li><a href="https://entry.line.biz/start/jp/" target="_blank">LINE 公式アカウント</a>を作る（無料のコミュニケーションプラン）</li>
+        <li><a href="https://manager.line.biz/" target="_blank">LINE Official Account Manager</a> →「設定」→「Messaging API」→「Messaging API を利用する」</li>
+        <li><a href="https://developers.line.biz/console/" target="_blank">LINE Developers</a> → できたチャネル →「Messaging API 設定」の一番下「<b>チャネルアクセストークン（長期）</b>」を発行して、下に貼る</li>
+        <li>Official Account Manager の「友だち追加ガイド」にある<b>友だち追加の URL</b>（https://lin.ee/… ）を下に貼る → すべての記事とブログの最後に「LINE で受け取る」が付きます</li>
+      </ol></details>
+      <div class="row">
+        <label><small>チャネルアクセストークン（長期）</small><input id="lnToken" type="password" autocomplete="new-password"></label>
+        <label><small>友だち追加の URL</small><input id="cLineUrl" placeholder="https://lin.ee/xxxx"></label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="cLineDigest" style="width:auto"> 週1回「今週の記事」を送る</label>
+        <label><small>曜日（0=日〜6=土）</small><input id="cLineDow" type="number" min="0" max="6"></label>
+        <label><small>時刻（日本時間の何時以降）</small><input id="cLineHour" type="number" min="0" max="23"></label>
+      </div>
+      <div class="actions"><button class="btn primary" onclick="saveLine()">保存</button>
+        <button class="btn" onclick="act('/api/line/check', {}, 'LINE の接続確認')">接続確認と残り通数</button>
+        <button class="btn" onclick="confirm('友だち全員に、今週の記事を今すぐ送ります。よいですか？') && act('/api/line/digest', {}, 'LINE 配信')">今すぐ送る</button></div>
+      <div class="scroll"><table id="lnLog"></table></div>
+    </div>
+
+    <div class="card"><h3>ブログ（Google 検索から読まれる場所）</h3>
+      <p id="blStatus"></p>
+      <p><small>公開した note 記事を、検索向けに書き直して載せます（有料記事は無料部分だけ。続きは note へ案内）。1時間に1本ずつ作ります。費用は AI 代の数円だけです。</small></p>
+      <div class="row">
+        <label><small>ブログの名前</small><input id="cBlogTitle"></label>
+        <label><small>Google Search Console の確認コード（HTML タグの content の値）</small><input id="cGoogle" placeholder="abc123..."></label>
+      </div>
+      <label><input type="checkbox" id="cBlog" style="width:auto"> ブログを作る</label>
+      <label><small>アフィリエイト（1行に1つ：「名前 | URL | どんな記事に合うか」。合う記事にだけ AI が入れ、「PR」と表示します）</small>
+        <textarea id="cAffiliates" style="min-height:90px" placeholder="英検5級 でる順パス単 | https://amzn.to/xxxx | 子どもの英検・単語の覚え方"></textarea></label>
+      <div class="actions"><button class="btn primary" onclick="saveSocial()">保存</button>
+        <button class="btn" onclick="act('/api/blog/write', {}, 'ブログ作成')">今すぐ1本作る</button></div>
+      <div class="scroll"><table id="blList"></table></div>
     </div>
   </section>
 
@@ -390,6 +458,63 @@ async function saveX() {
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }
 }
 
+async function loadSocial() {
+  const [d, st] = await Promise.all([api("/api/social"), api("/api/settings")]);
+  $("cCollections").value = (st.collections || []).map((c) => `${c.when} ${c.name}`).join("\n");
+  $("cRelated").checked = st.relatedLinks;
+  $("cThPub").checked = st.threadsOnPublish; $("cThDaily").checked = st.threadsDailyPromo; $("cThHour").value = st.threadsDailyHour;
+  $("cLineUrl").value = st.lineAddUrl || ""; $("cLineDigest").checked = st.lineDigest; $("cLineDow").value = st.lineDigestDow; $("cLineHour").value = st.lineDigestHour;
+  $("cBlog").checked = st.blogEnabled; $("cBlogTitle").value = st.blogTitle; $("cGoogle").value = st.googleVerification || "";
+  $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
+  $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
+  $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
+  $("lnStatus").innerHTML = d.line.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
+  $("lnLog").innerHTML = d.line.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.sent ? `送信（${l.count} 本${l.people != null ? `・${l.people} 人` : ""}）` : "見送り"}</td><td><small>${esc(l.reason || l.text || "")}</small></td></tr>`).join("");
+  const base = d.blog.base;
+  $("blStatus").innerHTML = base ? `ブログ：<a href="${esc(base)}/blog" target="_blank">${esc(base)}/blog</a>　／ Search Console に登録するサイトマップ：<code>${esc(base)}/sitemap.xml</code>` : "";
+  $("blList").innerHTML = "<tr><th>日付</th><th>記事</th><th>PR</th><th></th></tr>" + d.blog.posts.map((p) =>
+    `<tr><td>${jst(p.at)}</td><td><a href="${esc(base)}/blog/${esc(p.slug)}" target="_blank">${esc(p.title)}</a></td><td>${p.affiliates.length || "-"}</td>
+     <td><button class="btn" onclick="removeBlog('${esc(p.slug)}')">消して書き直す</button></td></tr>`).join("");
+}
+function parseLines(id, re, make) {
+  return $(id).value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(re);
+    if (!m) throw new Error(`読めない行があります：${l}`);
+    return make(m);
+  });
+}
+async function saveSocial() {
+  try {
+    const collections = parseLines("cCollections", /^(paid|free|all)\s+(.+)$/, (m) => ({ when:m[1], name:m[2].trim() }));
+    const affiliates = parseLines("cAffiliates", /^(.+?)\s*\|\s*(https:\/\/\S+)\s*(?:\|\s*(.*))?$/, (m) => ({ name:m[1].trim(), url:m[2], fit:(m[3] || "").trim() }));
+    await api("/api/settings", "PUT", { collections, affiliates, relatedLinks:$("cRelated").checked,
+      blogEnabled:$("cBlog").checked, blogTitle:$("cBlogTitle").value.trim() || "英語のはなし", googleVerification:$("cGoogle").value.trim().replace(/^.*content="([^"]+)".*$/, "$1") });
+    toast("保存しました"); loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function saveThreads() {
+  try {
+    await api("/api/settings", "PUT", { threadsOnPublish:$("cThPub").checked, threadsDailyPromo:$("cThDaily").checked, threadsDailyHour:Math.min(23, Math.max(0, Number($("cThHour").value) || 0)) });
+    if ($("thToken").value.trim()) { const r = await api("/api/threads/token", "PUT", { token:$("thToken").value }); $("thToken").value = ""; toast(`保存しました（@${r.username}）`); }
+    else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function saveLine() {
+  try {
+    const url = $("cLineUrl").value.trim();
+    if (url && !/^https:\/\//.test(url)) throw new Error("友だち追加の URL は https:// から始まるものを入れてください");
+    await api("/api/settings", "PUT", { lineAddUrl:url, lineDigest:$("cLineDigest").checked, lineDigestDow:Math.min(6, Math.max(0, Number($("cLineDow").value) || 0)), lineDigestHour:Math.min(23, Math.max(0, Number($("cLineHour").value) || 0)) });
+    if ($("lnToken").value.trim()) { const r = await api("/api/line/token", "PUT", { token:$("lnToken").value }); $("lnToken").value = ""; toast(`保存しました（${r.name}。今月の残り ${r.left === null ? "無制限" : r.left} 通）`); }
+    else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function removeBlog(slug) {
+  if (!confirm("このブログ記事を消します。次の自動実行で書き直されます。よいですか？")) return;
+  await api(`/api/blog/${encodeURIComponent(slug)}`, "DELETE"); loadSocial();
+}
+
 let topics = [];
 let audiences = [];
 const audienceName = (id) => (audiences.find((a) => a.id === id) || audiences[0] || {}).name || "";
@@ -492,7 +617,7 @@ async function saveSettings() {
 
 function load() {
   // 読み込みの失敗を画面に出す（何も出ないと原因がわからないため）
-  for (const [label, fn] of [["ダッシュボード", loadDash], ["取り込み状況", loadImportInfo], ["記事", loadArticles], ["ネタ帳", loadTopics], ["話題枠", loadTrends], ["アプリ", loadApps], ["X", loadX], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
+  for (const [label, fn] of [["ダッシュボード", loadDash], ["取り込み状況", loadImportInfo], ["記事", loadArticles], ["ネタ帳", loadTopics], ["話題枠", loadTrends], ["アプリ", loadApps], ["SNS・LINE・ブログ", loadSocial], ["X", loadX], ["実行ログ", loadLogs], ["設定", loadSettings]]) {
     fn().catch((e) => toast(`${label}の読み込みに失敗：${e.message}`, 12000));
   }
 }

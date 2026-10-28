@@ -226,6 +226,27 @@ async function uploadHeaderImage(page, article, run, title) {
   }
 }
 
+// 公開設定の画面で、note のマガジン・メンバーシップに記事を入れる（設定の collections）。
+// 名前の書かれた行の「追加」を押す。見つからなくても公開は続ける
+async function addToCollections(page, article, run) {
+  const targets = (getSettings().collections || []).filter((c) =>
+    c.name && (c.when === "all" || (c.when === "paid" ? article.price > 0 : c.when === "free" ? !article.price : false)));
+  for (const { name } of targets) {
+    try {
+      const label = page.getByText(name, { exact: true }).first();
+      await label.waitFor({ timeout: 5000 });
+      await label.scrollIntoViewIfNeeded();
+      // 名前を含む一番近い枠の中の「追加」ボタン
+      const button = label.locator('xpath=ancestor::*[.//button][1]').locator("button", { hasText: /追加/ }).first();
+      await button.click({ timeout: 5000 });
+      await page.waitForTimeout(800);
+      run.info(`📚 「${name}」に追加しました`);
+    } catch (e) {
+      run.info(`⚠️ 「${name}」に追加できませんでした（${e.message.split("\n")[0].slice(0, 150)}）。画面：${(await describeScreen(page)).slice(0, 400)}`);
+    }
+  }
+}
+
 async function post(page, article, draftOnly, run) {
   await page.goto("https://note.com/notes/new", { waitUntil: "domcontentloaded" });
   const title = await first(page, ['textarea[placeholder*="タイトル"]', '[placeholder*="記事タイトル"]'], 20000);
@@ -283,6 +304,7 @@ async function post(page, article, draftOnly, run) {
     await run.shot(page, "paid-line");
   }
 
+  await addToCollections(page, article, run);
   await run.shot(page, "before-publish");
   // 編集画面の URL（editor.note.com/notes/<記事の番号>/...）から、記事の番号を控えておく
   const key = (page.url().match(/\/notes\/(n[0-9a-z]+)/) || [])[1];
