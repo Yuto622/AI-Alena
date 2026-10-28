@@ -45,6 +45,38 @@ async function describeScreen(page) {
   }).catch(() => "");
 }
 
+// 文字のないアイコンのボタンのうち、タイトル欄のすぐ上（または左右）にあるものを、見出し画像のボタンとみなす
+async function iconButtonAboveTitle(page) {
+  const found = await page.evaluate(() => {
+    const title = document.querySelector('textarea[placeholder*="タイトル"]');
+    if (!title) return false;
+    const t = title.getBoundingClientRect();
+    const near = [...document.querySelectorAll("button, [role=button]")].filter((b) => {
+      if (b.offsetParent === null || b.innerText.trim()) return false;
+      const r = b.getBoundingClientRect();
+      return r.width > 0 && r.top < t.top && r.top >= t.top - 400 && r.left >= t.left - 120 && r.right <= t.right + 120;
+    });
+    near.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+    if (!near[0]) return false;
+    near[0].setAttribute("data-nw-header", "1");
+    return true;
+  });
+  if (!found) throw new Error("見出し画像のボタンが見つかりません");
+  return page.locator('[data-nw-header="1"]');
+}
+
+// 文字のないアイコンのボタンの一覧（画面が変わったときに、どれが何かを調べるため）
+async function describeIconButtons(page) {
+  return page.evaluate(() => [...document.querySelectorAll("button, [role=button]")]
+    .filter((b) => b.offsetParent !== null && !b.innerText.trim())
+    .slice(0, 15)
+    .map((b) => {
+      const r = b.getBoundingClientRect();
+      const label = b.getAttribute("aria-label") || b.getAttribute("title") || b.getAttribute("data-testid") || "";
+      return `(${Math.round(r.left)},${Math.round(r.top)}) ${label} .${String(b.className).slice(0, 40)}`;
+    }).join(" | ")).catch(() => "");
+}
+
 class Run {
   constructor(label) {
     this.dir = path.join(paths.out, `${new Date().toISOString().replace(/[:.]/g, "-")}-${label}`);
@@ -125,7 +157,7 @@ async function saveDraft(page, run) {
 }
 
 // 見出し画像を作って載せる。note の画面が想定と違っても、画像なしで投稿を続ける
-async function uploadHeaderImage(page, article, run) {
+async function uploadHeaderImage(page, article, run, title) {
   const settings = getSettings();
   if (!settings.headerImage) return;
   try {
@@ -133,11 +165,17 @@ async function uploadHeaderImage(page, article, run) {
     fs.mkdirSync(run.dir, { recursive: true });
     const file = path.join(run.dir, "header.png");
     fs.writeFileSync(file, png);
+    // 「note のヒント」などの吹き出しが重なっていたら閉じる
+    const close = await first(page, ['[role="dialog"] button:has-text("閉じる")', 'button:text-is("閉じる")'], 1500).catch(() => null);
+    if (close) await close.click().catch(() => {});
+    // 見出し画像のボタンは文字のないアイコンで、タイトルにマウスを乗せると出てくることがある
+    await title.hover().catch(() => {});
+    await page.waitForTimeout(500);
     const firstChooser = page.waitForEvent("filechooser", { timeout: 10000 }).catch(() => null);
     const button = await first(page, [
       'button[aria-label*="見出し画像"]', 'button[aria-label*="画像を追加"]', 'button[aria-label*="画像"]',
       'button:has-text("見出し画像")', 'button:has-text("画像を追加")', '[class*="eyecatch" i] button',
-    ], 8000);
+    ], 3000).catch(() => iconButtonAboveTitle(page));
     await button.click();
     await page.waitForTimeout(800);
     // ボタンを押すと「画像をアップロード」などのメニューが出る場合は、それを選ぶ
@@ -175,7 +213,7 @@ async function uploadHeaderImage(page, article, run) {
     run.info("🖼️ 見出し画像を載せました");
   } catch (e) {
     await run.shot(page, "header-image-failed").catch(() => {});
-    run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0].slice(0, 300)}）。画面：${(await describeScreen(page)).slice(0, 600)}`);
+    run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0].slice(0, 200)}）。アイコンのボタン：${await describeIconButtons(page)}`);
     await page.keyboard.press("Escape").catch(() => {});
   }
 }
@@ -183,7 +221,7 @@ async function uploadHeaderImage(page, article, run) {
 async function post(page, article, draftOnly, run) {
   await page.goto("https://note.com/notes/new", { waitUntil: "domcontentloaded" });
   const title = await first(page, ['textarea[placeholder*="タイトル"]', '[placeholder*="記事タイトル"]'], 20000);
-  await uploadHeaderImage(page, article, run);
+  await uploadHeaderImage(page, article, run, title);
   await title.fill(article.title);
   const editor = await first(page, [".ProseMirror", '[contenteditable="true"]']);
   await pasteHtml(page, editor, article.html);
