@@ -204,10 +204,34 @@ async function post(page, article, draftOnly, run) {
   }
 
   await run.shot(page, "before-publish");
+  // 編集画面の URL（editor.note.com/notes/<記事の番号>/...）から、記事の番号を控えておく
+  const key = (page.url().match(/\/notes\/(n[0-9a-z]+)/) || [])[1];
+  const before = page.url();
   await (await first(page, ['button:has-text("投稿する")', 'button:has-text("更新する")'])).click();
-  await page.waitForURL((u) => /\/n\/n[0-9a-z]+/.test(u.pathname), { timeout: 30000 });
+  // 公開すると、記事のページか「おすすめ設定」（like_reaction_setting）などの画面に移る。
+  // 押す前と違う URL になり、編集画面を離れたら公開済みとみなす
+  await page.waitForURL((u) => u.href !== before && (/\/n\/n[0-9a-z]+/.test(u.pathname) || !u.hostname.startsWith("editor.")),
+    { timeout: 45000 });
+  await page.waitForTimeout(1500);
   await run.shot(page, "published");
-  return { url: page.url(), draft: false };
+  return { url: await publicUrl(page, key), draft: false };
+}
+
+// 公開した記事の URL。記事のページにいればそれを使い、そうでなければ記事の番号から調べる
+async function publicUrl(page, key) {
+  if (/\/n\/n[0-9a-z]+/.test(new URL(page.url()).pathname)) return page.url().split("?")[0];
+  if (!key) return page.url();
+  const viaApi = await page.evaluate(async (key) => {
+    try {
+      const r = await fetch(`/api/v3/notes/${key}`, { credentials: "include" });
+      return r.ok ? (await r.json())?.data?.note_url || null : null;
+    } catch {
+      return null;
+    }
+  }, key).catch(() => null);
+  if (viaApi) return viaApi;
+  const urlname = getSettings().noteUrlname;
+  return urlname ? `https://note.com/${urlname}/n/${key}` : `https://note.com/notes/${key}`;
 }
 
 // 公開してよいかの確認。だめなら理由を投げる

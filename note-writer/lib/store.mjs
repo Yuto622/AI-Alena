@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS = {
   bufferSize: 3,
   dailyGenerateLimit: 2,
   minIntervalHours: 3,
+  // note の ID（note.com/<ID>）。公開した記事の URL を作るときの予備
+  noteUrlname: "",
   // 見出し画像を自動で作って載せる（ブラウザで描くので費用0円）
   headerImage: true,
   // 1日1回、note のダッシュボードから閲覧数・販売数を取り込む

@@ -84,6 +84,7 @@
         <label><small>アカウント</small><input id="edAccount" placeholder="default"></label>
         <label><small>末尾の案内（cta/ のファイル名）</small><input id="edCta" placeholder="なし"></label>
         <label><small>紹介するアプリ（空なら公開時に AI が選ぶ）</small><select id="edApp"></select></label>
+        <label><small>公開した記事の URL（公開済みにするとき）</small><input id="edUrl" placeholder="https://note.com/..."></label>
       </div>
       <p><a id="edThumb" href="#" target="_blank">見出し画像の見本を開く</a></p>
       <label><small>本文（Markdown。&lt;!-- paid --&gt; の行より下が有料部分）</small><textarea id="edBody"></textarea></label>
@@ -206,6 +207,7 @@
     </div>
     <div class="card">
       <div class="row">
+        <label><small>note の ID（note.com/〇〇 の〇〇）</small><input id="sUrlname" placeholder="uspeaklab"></label>
         <label><small>月の目標（円・手取り）</small><input id="sGoal" type="number"></label>
         <label><small>note の手数料率（概算）</small><input id="sFee" type="number" step="0.01"></label>
         <label><small>公開の最低間隔（時間）</small><input id="sInterval" type="number"></label>
@@ -308,6 +310,7 @@ async function openArticle(name) {
   $("edApp").innerHTML = `<option value="">（AI が選ぶ）</option><option value="none">紹介しない</option>` +
     apps.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
   $("edApp").value = meta.app || "";
+  $("edUrl").value = meta.url || "";
   $("edThumb").href = `/api/articles/${encodeURIComponent(name)}/thumbnail.png`;
   $("edBody").value = body; $("editor").scrollIntoView({ behavior:"smooth" });
   if (meta.error) toast(`前回の公開で失敗しました：${meta.error}\n「実行ログ」で画面を確認し、直したら状態を「公開OK」に戻してください。`, 12000);
@@ -315,7 +318,7 @@ async function openArticle(name) {
 async function saveArticle() {
   const meta = { ...current.meta, title:$("edTitle").value, price:Number($("edPrice").value) || 0, status:$("edStatus").value,
     tags:$("edTags").value.split(/[,、]/).map((s) => s.trim()).filter(Boolean), publish_at:fromLocal($("edAt").value),
-    account:$("edAccount").value.trim(), cta:$("edCta").value.trim(), app:$("edApp").value,
+    account:$("edAccount").value.trim(), cta:$("edCta").value.trim(), app:$("edApp").value, url:$("edUrl").value.trim(),
     error:$("edStatus").value === "error" ? current.meta.error : "" };
   await api(`/api/articles/${encodeURIComponent(current.name)}`, "PUT", { meta, body:$("edBody").value });
   current.meta = meta; toast("保存しました"); load();
@@ -454,7 +457,7 @@ async function loadSettings() {
   loadAccounts();
   loadCta();
   const s = await api("/api/settings");
-  $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
+  $("sUrlname").value = s.noteUrlname || ""; $("sGoal").value = s.goalMonthly; $("sFee").value = s.feeRate; $("sInterval").value = s.minIntervalHours; $("sBuffer").value = s.bufferSize;
   $("sSchedule").value = s.schedule.map((x) => `${x.dow} ${x.time}`).join(", ");
   $("sAutoGen").checked = s.autoGenerate; $("sAutoApprove").checked = s.autoApprove; $("sProfile").value = s.profile;
   $("sDaily").value = s.dailyGenerateLimit;
@@ -476,7 +479,7 @@ function parseAudiences() {
 }
 async function saveSettings() {
   const schedule = $("sSchedule").value.split(",").map((x) => x.trim().split(/\s+/)).filter((x) => x.length === 2).map(([d, t]) => ({ dow:Number(d), time:t }));
-  await api("/api/settings", "PUT", { goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
+  await api("/api/settings", "PUT", { noteUrlname:$("sUrlname").value.trim(), goalMonthly:Number($("sGoal").value), feeRate:Number($("sFee").value), minIntervalHours:Number($("sInterval").value),
     bufferSize:Number($("sBuffer").value), dailyGenerateLimit:Number($("sDaily").value), schedule,
     audiences: parseAudiences(),
     trendEnabled:$("sTrend").checked, trendPerWeek:Number($("sTrendWeek").value) || 0,
