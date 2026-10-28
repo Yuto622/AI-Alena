@@ -56,7 +56,7 @@ app.get("/go/:app", (req, res) => {
 });
 
 // ブログ（誰でも読める。検索エンジン向けの sitemap.xml と robots.txt も）
-app.get("/blog", (_req, res) => res.type("html").send(renderIndex()));
+app.get("/blog", (req, res) => res.type("html").send(renderIndex({ tag: String(req.query.tag || "").slice(0, 50) })));
 app.get("/blog/:slug", (req, res) => {
   const post = getBlogPost(req.params.slug);
   if (!post) return res.status(404).type("html").send(renderIndex());
