@@ -29,7 +29,8 @@ export function* upcomingSlots(schedule, now = new Date()) {
 }
 
 export function nextFreeSlot(articles = listArticles()) {
-  const taken = new Set(articles.map((a) => a.publish_at).filter(Boolean).map((t) => Date.parse(t)));
+  // 予定より早く（手で）公開した記事は、その枠を使っていないので空きとして扱う
+  const taken = new Set(articles.filter((a) => a.status !== "published").map((a) => a.publish_at).filter(Boolean).map((t) => Date.parse(t)));
   for (const slot of upcomingSlots(getSettings().schedule)) {
     if (!taken.has(slot.getTime())) return slot;
   }
