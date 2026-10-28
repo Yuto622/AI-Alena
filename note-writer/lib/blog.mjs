@@ -35,14 +35,29 @@ export function getBlogPost(slug) {
 }
 
 // まだブログにしていない公開済みの記事（古いものから）
-export function nextArticleForBlog() {
+// manual: 管理画面のボタンから。失敗して1日お休み中の記事も対象にする
+export function nextArticleForBlog({ manual = false } = {}) {
   if (!getSettings().blogEnabled) return null;
   const done = new Set(getBlogPosts().map((p) => p.source));
   const failed = readJson(FAILED, {});
-  const recentlyFailed = (name) => failed[name] && Date.now() - Date.parse(failed[name]) < 864e5;
+  // 記録は { at, error }（前の形式は日時の文字列だけ）
+  const failedAt = (name) => (typeof failed[name] === "string" ? failed[name] : failed[name]?.at);
+  const recentlyFailed = (name) => !manual && failedAt(name) && Date.now() - Date.parse(failedAt(name)) < 864e5;
   return listArticles()
     .filter((a) => a.status === "published" && /^https:\/\//.test(a.url) && !done.has(a.name) && !recentlyFailed(a.name))
     .sort((a, b) => (a.publish_at || "").localeCompare(b.publish_at || ""))[0] || null;
+}
+
+// ブログにできる記事がないとき、その理由（管理画面に出す）
+export function whyNoBlogCandidate() {
+  if (!getSettings().blogEnabled) return "ブログが OFF です（「ブログを作る」にチェックを入れて保存）";
+  const done = new Set(getBlogPosts().map((p) => p.source));
+  const published = listArticles().filter((a) => a.status === "published");
+  if (!published.length) return "公開済みの記事がまだありません";
+  const noUrl = published.filter((a) => !/^https:\/\//.test(a.url));
+  if (noUrl.length) return `公開済みなのに note の URL が入っていない記事があります：${noUrl.map((a) => a.title).join("、")}。「記事」で開いて、URL 欄に note の記事の URL を入れて保存してください`;
+  if (published.every((a) => done.has(a.name))) return "公開済みの記事は、すべてブログにしてあります";
+  return "ブログにできる記事が見つかりません";
 }
 
 const SCHEMA = {
@@ -70,7 +85,7 @@ export async function writeBlogPost(name) {
   try {
     return await rewrite(name);
   } catch (e) {
-    writeJson(FAILED, { ...readJson(FAILED, {}), [name]: new Date().toISOString() });
+    writeJson(FAILED, { ...readJson(FAILED, {}), [name]: { at: new Date().toISOString(), error: e.message.slice(0, 300) } });
     throw e;
   }
 }

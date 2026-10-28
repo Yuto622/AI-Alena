@@ -17,7 +17,7 @@ import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
 import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
-import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, sitemap, robots, nextArticleForBlog, writeBlogPost } from "./lib/blog.mjs";
+import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate } from "./lib/blog.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -171,8 +171,8 @@ app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
 app.post("/api/line/check", wrap(() => lineWhoAmI()));
 app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));
 app.post("/api/blog/write", wrap(async () => {
-  const next = nextArticleForBlog();
-  if (!next) throw new Error("ブログにしていない公開済みの記事はありません（ブログが OFF のときも）");
+  const next = nextArticleForBlog({ manual: true });
+  if (!next) throw new Error(whyNoBlogCandidate());
   return writeBlogPost(next.name);
 }));
 app.delete("/api/blog/:slug", wrap((req) => {
