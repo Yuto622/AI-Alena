@@ -198,15 +198,20 @@ async function uploadHeaderImage(page, article, run, title) {
       if (!(await input.count())) throw new Error("画像を渡す場所が見つかりません");
       await input.setInputFiles(file);
     }
-    // 切り抜きの確認画面が出たら確定する
-    // 「保存」だけで探すと画面上部の「下書き保存」を押してしまうので、確認画面の中のボタンを文字の完全一致で探す
-    const ok = await first(page, [
-      '[role="dialog"] button:text-is("保存")', '[role="dialog"] button:text-is("適用")', '[role="dialog"] button:text-is("完了")',
-      '[role="dialog"] button:text-is("決定")', 'button:text-is("保存")', 'button:text-is("適用")', 'button:text-is("完了")',
-    ], 8000).catch(() => null);
-    if (ok) {
-      await ok.click();
-      await page.locator('[role="dialog"]').first().waitFor({ state: "hidden", timeout: 15000 }).catch(() => {});
+    // 切り抜きの確認画面（ReactModalPortal の中に cropper）が出たら「保存」で確定する。
+    // 画面上部の「下書き保存」を押さないよう、確認画面の中のボタンに限る
+    const cropper = page.locator('[data-testid="cropper"]');
+    if (await cropper.first().waitFor({ timeout: 10000 }).then(() => true, () => false)) {
+      await page.waitForTimeout(1500);
+      const modal = page.locator(".ReactModalPortal").filter({ has: cropper });
+      const save = modal.locator("button", { hasText: /^\s*(保存|適用|完了|決定)\s*$/ }).last();
+      for (let i = 0; i < 2 && (await cropper.first().isVisible().catch(() => false)); i++) {
+        // 切り抜きの枠がボタンの上に重なってクリックを奪うことがあるので、2回目はボタンを直接押す
+        if (i === 0) await save.click({ timeout: 5000 }).catch(() => {});
+        else await save.evaluate((b) => b.click()).catch(() => {});
+        await cropper.first().waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
+      }
+      if (await cropper.first().isVisible().catch(() => false)) throw new Error("切り抜き画面の「保存」が効きませんでした");
     }
     await page.waitForTimeout(3000);
     await run.shot(page, "header-image");
@@ -214,7 +219,10 @@ async function uploadHeaderImage(page, article, run, title) {
   } catch (e) {
     await run.shot(page, "header-image-failed").catch(() => {});
     run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0].slice(0, 200)}）。アイコンのボタン：${await describeIconButtons(page)}`);
+    // 切り抜き画面が残ると、このあとの入力がすべて止まるので、必ず閉じる
     await page.keyboard.press("Escape").catch(() => {});
+    const cancel = page.locator(".ReactModalPortal button", { hasText: /^\s*キャンセル\s*$/ }).last();
+    if (await cancel.isVisible().catch(() => false)) await cancel.click({ force: true }).catch(() => {});
   }
 }
 
