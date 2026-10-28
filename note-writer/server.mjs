@@ -17,7 +17,7 @@ import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
 import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
-import { getBlogPosts, getBlogPost, renderPost, renderIndex, sitemap, robots, nextArticleForBlog, writeBlogPost } from "./lib/blog.mjs";
+import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, sitemap, robots, nextArticleForBlog, writeBlogPost } from "./lib/blog.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -53,6 +53,23 @@ app.get("/go/:app", (req, res) => {
     console.error(`クリックの記録に失敗：${e.message}`);
   }
   res.redirect(302, toSite ? target.siteUrl : target.url);
+});
+
+// ブログを会社のドメインで出しているとき：
+// - そのドメインでは、ブログとクリック計測のリンクだけを出す（管理画面は出さない）
+// - それ以外のアドレスで開かれたブログは、会社のドメインへ移す（同じ記事が2か所にあると検索で不利なため）
+app.use((req, res, next) => {
+  const domain = getSettings().blogDomain;
+  if (!domain) return next();
+  const host = (req.get("host") || "").toLowerCase();
+  const isBlogPath = req.path === "/blog" || req.path.startsWith("/blog/") || req.path === "/sitemap.xml" || req.path === "/robots.txt";
+  if (host === domain) {
+    if (req.path === "/") return res.redirect(301, "/blog");
+    if (isBlogPath || req.path.startsWith("/go/") || req.path === "/healthz") return next();
+    return res.status(404).send("not found");
+  }
+  if (isBlogPath) return res.redirect(301, `https://${domain}${req.originalUrl}`);
+  next();
 });
 
 // ブログ（誰でも読める。検索エンジン向けの sitemap.xml と robots.txt も）
@@ -146,7 +163,7 @@ app.post("/api/x/post", wrap(async (req) => {
 app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
-  blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: process.env.PUBLIC_URL || "" },
+  blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase() },
 })));
 app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
 app.post("/api/threads/check", wrap(() => threadsWhoAmI()));

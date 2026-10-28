@@ -130,7 +130,12 @@ ${free.slice(0, 12000)}`, SCHEMA);
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const base = () => (process.env.PUBLIC_URL || "").replace(/\/$/, "");
+// ブログのアドレス。会社のドメイン（例：blog.uspeaklab.org）を設定したらそちら
+export const blogBase = () => {
+  const domain = getSettings().blogDomain;
+  return domain ? `https://${domain}` : (process.env.PUBLIC_URL || "").replace(/\/$/, "");
+};
+const base = blogBase;
 const dateJa = (iso) => new Date(iso).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 const minutes = (md) => Math.max(1, Math.round(md.replace(/\s/g, "").length / 600));
 

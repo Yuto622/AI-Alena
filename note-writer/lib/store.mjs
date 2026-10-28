@@ -58,6 +58,8 @@ export const DEFAULT_SETTINGS = {
   blogTitle: "UCLA 在学生が書く 英語のはなし",
   // アフィリエイト：{ name, url, fit }（fit は「どんな記事に合うか」）。合う記事にだけ AI が入れる
   affiliates: [],
+  // ブログを会社のドメインで出すとき（例：blog.uspeaklab.org）。DNS と Cloud Run のドメイン設定が済んでから入れる
+  blogDomain: "",
   // Google Search Console の「HTML タグ」の content の値
   googleVerification: "",
 };

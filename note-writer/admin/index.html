@@ -213,6 +213,7 @@
       <div class="row">
         <label><small>ブログの名前</small><input id="cBlogTitle"></label>
         <label><small>Google Search Console の確認コード（HTML タグの content の値）</small><input id="cGoogle" placeholder="abc123..."></label>
+        <label><small>会社のドメインで出す（DNS の設定が済んでから入れる）</small><input id="cBlogDomain" placeholder="blog.uspeaklab.org"></label>
       </div>
       <label><input type="checkbox" id="cBlog" style="width:auto"> ブログを作る</label>
       <label><small>アフィリエイト（1行に1つ：「名前 | URL | どんな記事に合うか」。合う記事にだけ AI が入れ、「PR」と表示します）</small>
@@ -464,7 +465,7 @@ async function loadSocial() {
   $("cRelated").checked = st.relatedLinks;
   $("cThPub").checked = st.threadsOnPublish; $("cThDaily").checked = st.threadsDailyPromo; $("cThHour").value = st.threadsDailyHour;
   $("cLineUrl").value = st.lineAddUrl || ""; $("cLineDigest").checked = st.lineDigest; $("cLineDow").value = st.lineDigestDow; $("cLineHour").value = st.lineDigestHour;
-  $("cBlog").checked = st.blogEnabled; $("cBlogTitle").value = st.blogTitle; $("cGoogle").value = st.googleVerification || "";
+  $("cBlog").checked = st.blogEnabled; $("cBlogTitle").value = st.blogTitle; $("cGoogle").value = st.googleVerification || ""; $("cBlogDomain").value = st.blogDomain || "";
   $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
   $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
@@ -488,7 +489,8 @@ async function saveSocial() {
     const collections = parseLines("cCollections", /^(paid|free|all)\s+(.+)$/, (m) => ({ when:m[1], name:m[2].trim() }));
     const affiliates = parseLines("cAffiliates", /^(.+?)\s*\|\s*(https:\/\/\S+)\s*(?:\|\s*(.*))?$/, (m) => ({ name:m[1].trim(), url:m[2], fit:(m[3] || "").trim() }));
     await api("/api/settings", "PUT", { collections, affiliates, relatedLinks:$("cRelated").checked,
-      blogEnabled:$("cBlog").checked, blogTitle:$("cBlogTitle").value.trim() || "英語のはなし", googleVerification:$("cGoogle").value.trim().replace(/^.*content="([^"]+)".*$/, "$1") });
+      blogEnabled:$("cBlog").checked, blogTitle:$("cBlogTitle").value.trim() || "英語のはなし", googleVerification:$("cGoogle").value.trim().replace(/^.*content="([^"]+)".*$/, "$1"),
+      blogDomain:$("cBlogDomain").value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") });
     toast("保存しました"); loadSocial();
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }
 }
