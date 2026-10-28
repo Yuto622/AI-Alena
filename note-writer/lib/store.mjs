@@ -4,12 +4,8 @@ import path from "path";
 import { paths } from "./config.mjs";
 
 export const DEFAULT_SETTINGS = {
-  // 月・水・金 20:00（日本時間）。dow は 0=日曜
-  schedule: [
-    { dow: 1, time: "20:00" },
-    { dow: 3, time: "20:00" },
-    { dow: 5, time: "20:00" },
-  ],
+  // 毎日 20:00（日本時間）。dow は 0=日曜
+  schedule: [0, 1, 2, 3, 4, 5, 6].map((dow) => ({ dow, time: "20:00" })),
   goalMonthly: 10000,
   // note の手数料率の概算（実際の率は note の規約で確認して設定）
   feeRate: 0.15,
