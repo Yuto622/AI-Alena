@@ -99,7 +99,7 @@ export function appCtaMarkdown(appId, articleName) {
 
 ${app.pitch || app.description || ""}
 
-**▶ [申し込む（お支払いのあと、日時を選べます）](${link})**
+**▶ [${app.ctaLabel || "申し込む（お支払いのあと、日時を選べます）"}](${link})**
 ${app.fineprint ? `\n※${app.fineprint}\n` : ""}${siteLine}`;
   }
   if (app.kind === "business") {
@@ -120,6 +120,6 @@ ${siteLine}`;
 
 ${app.pitch || app.description || ""}
 
-**▶ [「${app.name}」をスマホに入れる](${link})**
+**▶ [${app.ctaLabel || `「${app.name}」をスマホに入れる`}](${link})**
 ${siteLine}`;
 }

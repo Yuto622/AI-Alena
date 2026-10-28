@@ -139,8 +139,14 @@
         <label><small>向いている人</small><input id="apAud" placeholder="例：英語を話せるようになりたい大学生・社会人"></label>
       </div>
       <label><small>記事に載せる紹介文（1〜2文）</small><input id="apPitch" placeholder="例：英語が第二言語の私が、話す練習のために作ったアプリです。"></label>
+      <label><small>ボタンの文言（任意。例：ココナラで詳しく見る）</small><input id="apCta"></label>
       <label><small>注意書き（任意。サービスのときに小さく表示）</small><input id="apFine" placeholder="例：ビザ・在留資格の手続きの判断は扱いません。キャンセルの決まりは申し込みページをご覧ください。"></label>
       <div class="actions"><button class="btn primary" onclick="addApp()">＋ 追加</button></div>
+      <details style="margin-top:12px"><summary>まとめて登録（JSON を貼る）</summary>
+        <p><small>[{"name": "...", "kind": "service", "url": "https://...", ...}, ...] の形で貼ると、今の一覧の後ろに足します。</small></p>
+        <textarea id="apBulk" style="min-height:160px"></textarea>
+        <div class="actions"><button class="btn" onclick="bulkApps()">まとめて追加</button></div>
+      </details>
     </div>
     <div class="card"><h3>これまでの学び（週1回、実績から自動でまとめ直す）</h3>
       <pre id="learnings" style="white-space:pre-wrap;font:inherit"></pre>
@@ -340,10 +346,19 @@ async function loadApps() {
 }
 async function addApp() {
   const next = [...apps, { id:Date.now().toString(36), name:$("apName").value.trim(), url:$("apUrl").value.trim(), kind:$("apKind").value,
-    company:$("apCompany").value.trim(), siteUrl:$("apSite").value.trim() || undefined, fineprint:$("apFine").value.trim() || undefined,
+    company:$("apCompany").value.trim(), siteUrl:$("apSite").value.trim() || undefined, fineprint:$("apFine").value.trim() || undefined, ctaLabel:$("apCta").value.trim() || undefined,
     description:$("apDesc").value.trim(), audience:$("apAud").value.trim(), pitch:$("apPitch").value.trim() }];
-  try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch","apCompany","apSite","apFine"].forEach((id) => $(id).value = ""); $("apKind").value = "app"; toast("追加しました"); loadApps(); }
+  try { await api("/api/apps", "PUT", next); ["apName","apUrl","apDesc","apAud","apPitch","apCompany","apSite","apFine","apCta"].forEach((id) => $(id).value = ""); $("apKind").value = "app"; toast("追加しました"); loadApps(); }
   catch (e) { toast(`追加できません：${e.message}`, 8000); }
+}
+async function bulkApps() {
+  try {
+    const items = JSON.parse($("apBulk").value);
+    if (!Array.isArray(items)) throw new Error("[ ] で囲んだ一覧にしてください");
+    const next = [...apps, ...items.map((a, i) => ({ id: Date.now().toString(36) + i, ...a }))];
+    await api("/api/apps", "PUT", next);
+    $("apBulk").value = ""; toast(`${items.length} 件追加しました`); loadApps();
+  } catch (e) { toast(`追加できません：${e.message}`, 10000); }
 }
 async function removeApp(id) {
   if (!confirm("このアプリを外します（公開済みの記事のリンクは、アプリのページに飛ばなくなります）")) return;

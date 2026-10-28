@@ -16,8 +16,9 @@ export const DEFAULT_SETTINGS = {
   autoGenerate: true,
   // 読者層と、記事に占める割合。足りない読者層のテーマから先に書く（1つ目は、読者層の指定がないテーマの行き先）
   audiences: [
-    { id: "abroad", name: "海外大学・留学・英語学習に関心のある大学生・社会人と、その保護者", share: 0.7 },
+    { id: "abroad", name: "海外大学・留学・英語学習に関心のある大学生・社会人と、その保護者", share: 0.5 },
     { id: "kids", name: "子どもに英語を習わせている・英検を受けさせたい小学生の保護者と、英語教室の先生", share: 0.3 },
+    { id: "automation", name: "AI や仕組みで仕事を自動化したい個人事業主・小さな会社・教室経営者", share: 0.2 },
   ],
   // true なら、自動チェックに通った記事を人の確認なしで公開予約する（通らなければ下書きで止まる）
   autoApprove: true,
