@@ -29,16 +29,20 @@ async function first(page, selectors, timeout = 10000) {
     }
     await page.waitForTimeout(300);
   }
-  // note の画面が想定と違うとき、直すための手がかりとして、今見えている入力欄とボタンを一緒に出す
-  const seen = await page.evaluate(() => {
+  const seen = await describeScreen(page);
+  throw new Error(`見つかりません: ${selectors.join(" | ")}${seen ? `（画面にあったもの → ${seen}）` : ""}`);
+}
+
+// note の画面が想定と違うとき、直すための手がかりとして、今見えている入力欄とボタンを文字にする
+async function describeScreen(page) {
+  return page.evaluate(() => {
     const vis = (e) => e.offsetParent !== null;
     const inputs = [...document.querySelectorAll("input, textarea, select")].filter(vis).slice(0, 10).map((e) =>
       `${e.tagName.toLowerCase()}[type=${e.type || ""} name=${e.name || ""} placeholder=${e.placeholder || ""} inputmode=${e.inputMode || ""} aria=${e.getAttribute("aria-label") || ""}]`);
     const buttons = [...document.querySelectorAll("button, [role=button], label")].filter(vis)
-      .map((e) => e.innerText.trim().replace(/\s+/g, " ")).filter((t) => t && t.length < 20).slice(0, 15);
+      .map((e) => (e.innerText.trim() || e.getAttribute("aria-label") || "").replace(/\s+/g, " ")).filter((t) => t && t.length < 20).slice(0, 20);
     return `入力欄: ${inputs.join(" ") || "なし"} ／ ボタン: ${buttons.join("、")}`;
   }).catch(() => "");
-  throw new Error(`見つかりません: ${selectors.join(" | ")}${seen ? `（画面にあったもの → ${seen}）` : ""}`);
 }
 
 class Run {
@@ -129,19 +133,42 @@ async function uploadHeaderImage(page, article, run) {
     fs.mkdirSync(run.dir, { recursive: true });
     const file = path.join(run.dir, "header.png");
     fs.writeFileSync(file, png);
+    const firstChooser = page.waitForEvent("filechooser", { timeout: 10000 }).catch(() => null);
     const button = await first(page, [
-      'button[aria-label*="画像"]', 'button:has-text("画像を追加")', '[class*="eyecatch"] button', '[class*="Eyecatch"] button',
+      'button[aria-label*="見出し画像"]', 'button[aria-label*="画像を追加"]', 'button[aria-label*="画像"]',
+      'button:has-text("見出し画像")', 'button:has-text("画像を追加")', '[class*="eyecatch" i] button',
     ], 8000);
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 8000 }), button.click()]);
-    await chooser.setFiles(file);
+    await button.click();
+    await page.waitForTimeout(800);
+    // ボタンを押すと「画像をアップロード」などのメニューが出る場合は、それを選ぶ
+    const menuItem = await first(page, [
+      'button:has-text("画像をアップロード")', '[role="menuitem"]:has-text("アップロード")', 'li:has-text("画像をアップロード")',
+    ], 3000).catch(() => null);
+    let chooser;
+    if (menuItem) {
+      const next = page.waitForEvent("filechooser", { timeout: 8000 }).catch(() => null);
+      await menuItem.click();
+      chooser = await next;
+    } else {
+      chooser = await firstChooser;
+    }
+    if (chooser) {
+      await chooser.setFiles(file);
+    } else {
+      // ファイル選択の画面が開かない作りなら、画像を受け取る部品に直接渡す
+      const input = page.locator('input[type="file"][accept*="image"], input[type="file"]:not([accept])').last();
+      if (!(await input.count())) throw new Error("画像を渡す場所が見つかりません");
+      await input.setInputFiles(file);
+    }
     // 切り抜きの確認画面が出たら確定する
-    const ok = await first(page, ['button:has-text("保存")', 'button:has-text("適用")', 'button:has-text("完了")'], 8000).catch(() => null);
+    const ok = await first(page, ['button:has-text("保存")', 'button:has-text("適用")', 'button:has-text("完了")', 'button:has-text("決定")'], 8000).catch(() => null);
     if (ok) await ok.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
     await run.shot(page, "header-image");
     run.info("🖼️ 見出し画像を載せました");
   } catch (e) {
-    run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0]}）。画像なしで続けます`);
+    await run.shot(page, "header-image-failed").catch(() => {});
+    run.info(`⚠️ 見出し画像は載せられませんでした（${e.message.split("\n")[0].slice(0, 300)}）。画面：${(await describeScreen(page)).slice(0, 600)}`);
     await page.keyboard.press("Escape").catch(() => {});
   }
 }
