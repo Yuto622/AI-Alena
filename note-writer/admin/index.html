@@ -158,8 +158,8 @@
 
   <section id="social">
     <div class="card"><h3>note のマガジン・メンバーシップに自動で入れる</h3>
-      <p><small>先に note で、マガジン（またはメンバーシップのプラン）を作っておきます。公開するとき、名前の行の「追加」を自動で押します。1行に1つ：「paid 名前」（有料記事だけ）／「free 名前」（無料記事だけ）／「all 名前」（全部）。名前は note と一字一句同じに。</small></p>
-      <textarea id="cCollections" style="min-height:70px" placeholder="paid 海外大学の勉強法まとめ&#10;all U-Speak メンバーシップ"></textarea>
+      <p><small>先に note で、マガジン（またはメンバーシップのプラン）を作っておきます。公開するとき、名前の行の「追加」を自動で押します。1行に1つ：「paid 名前」（有料記事だけ）／「free 名前」（無料記事だけ）／「all 名前」（全部）。最後に「 #タグ」を付けると、そのタグの記事だけを入れます（例：paid 海外大学の勉強法まとめ #海外大学）。名前は note と一字一句同じに。</small></p>
+      <textarea id="cCollections" style="min-height:70px" placeholder="paid 海外大学の勉強法まとめ #海外大学&#10;all U-Speak メンバーシップ"></textarea>
       <label><input type="checkbox" id="cRelated" style="width:auto"> 記事の最後に「あわせて読みたい」（同じタグの過去の記事3本）を付ける</label>
       <div class="actions"><button class="btn primary" onclick="saveSocial()">保存</button></div>
     </div>
@@ -461,7 +461,7 @@ async function saveX() {
 
 async function loadSocial() {
   const [d, st] = await Promise.all([api("/api/social"), api("/api/settings")]);
-  $("cCollections").value = (st.collections || []).map((c) => `${c.when} ${c.name}`).join("\n");
+  $("cCollections").value = (st.collections || []).map((c) => `${c.when} ${c.name}${c.tag ? ` #${c.tag}` : ""}`).join("\n");
   $("cRelated").checked = st.relatedLinks;
   $("cThPub").checked = st.threadsOnPublish; $("cThDaily").checked = st.threadsDailyPromo; $("cThHour").value = st.threadsDailyHour;
   $("cLineUrl").value = st.lineAddUrl || ""; $("cLineDigest").checked = st.lineDigest; $("cLineDow").value = st.lineDigestDow; $("cLineHour").value = st.lineDigestHour;
@@ -486,7 +486,7 @@ function parseLines(id, re, make) {
 }
 async function saveSocial() {
   try {
-    const collections = parseLines("cCollections", /^(paid|free|all)\s+(.+)$/, (m) => ({ when:m[1], name:m[2].trim() }));
+    const collections = parseLines("cCollections", /^(paid|free|all)\s+(.+?)(?:\s+#(\S+))?$/, (m) => ({ when:m[1], name:m[2].trim(), ...(m[3] ? { tag:m[3] } : {}) }));
     const affiliates = parseLines("cAffiliates", /^(.+?)\s*\|\s*(https:\/\/\S+)\s*(?:\|\s*(.*))?$/, (m) => ({ name:m[1].trim(), url:m[2], fit:(m[3] || "").trim() }));
     await api("/api/settings", "PUT", { collections, affiliates, relatedLinks:$("cRelated").checked,
       blogEnabled:$("cBlog").checked, blogTitle:$("cBlogTitle").value.trim() || "英語のはなし", googleVerification:$("cGoogle").value.trim().replace(/^.*content="([^"]+)".*$/, "$1"),

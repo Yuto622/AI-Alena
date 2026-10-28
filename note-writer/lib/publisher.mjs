@@ -229,8 +229,10 @@ async function uploadHeaderImage(page, article, run, title) {
 // 公開設定の画面で、note のマガジン・メンバーシップに記事を入れる（設定の collections）。
 // 名前の書かれた行の「追加」を押す。見つからなくても公開は続ける
 async function addToCollections(page, article, run) {
+  // tag があれば、そのタグの付いた記事だけを入れる（例：海外大学の記事だけを「海外大学の勉強法まとめ」に）
   const targets = (getSettings().collections || []).filter((c) =>
-    c.name && (c.when === "all" || (c.when === "paid" ? article.price > 0 : c.when === "free" ? !article.price : false)));
+    c.name && (c.when === "all" || (c.when === "paid" ? article.price > 0 : c.when === "free" ? !article.price : false))
+    && (!c.tag || article.tags.includes(c.tag)));
   for (const { name } of targets) {
     try {
       const label = page.getByText(name, { exact: true }).first();
