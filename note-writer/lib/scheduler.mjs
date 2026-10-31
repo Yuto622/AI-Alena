@@ -10,6 +10,7 @@ import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./
 import { hasThreadsToken, postArticleToThreads, shouldPostThreadsDaily, getThreadsLog } from "./threads.mjs";
 import { shouldSendDigest, sendDigest } from "./line.mjs";
 import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
+import { youtubeEnabled, postArticleToYoutube } from "./youtube.mjs";
 import { nextArticleForBlog, writeBlogPost, nextPostForBooks, addBooksToPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -86,6 +87,14 @@ export async function publishArticle(name, { mode = "publish", force = false } =
         result.instagram = await postArticleToInstagram({ ...meta, name, body, url: result.url, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
       } catch (e) {
         result.instagramError = e.message;
+      }
+    }
+    if (youtubeEnabled()) {
+      try {
+        const { meta, body } = readArticleSource(name);
+        result.youtube = await postArticleToYoutube({ ...meta, name, body, url: result.url, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+      } catch (e) {
+        result.youtubeError = e.message;
       }
     }
   }

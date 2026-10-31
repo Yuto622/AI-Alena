@@ -54,6 +54,10 @@ export const DEFAULT_SETTINGS = {
   coconalaProfileUrl: "",
   // Instagram：公開したら、記事の要点を5枚のスライドにして投稿する
   instagramOnPublish: true,
+  // YouTube ショート：公開したら、要点を1分弱の縦長動画（ナレーション付き）にして投稿する
+  youtubeOnPublish: true,
+  // ナレーションの声（Google Cloud Text-to-Speech の日本語の声の名前）
+  ttsVoice: "ja-JP-Neural2-B",
   // LINE：友だち追加の URL（記事の最後に案内を付ける）と、週1回の「今週の記事」配信（曜日 0=日曜、日本時間の何時以降か）
   lineAddUrl: "",
   lineDigest: true,

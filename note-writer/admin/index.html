@@ -208,6 +208,31 @@
       <div class="scroll"><table id="igLog"></table></div>
     </div>
 
+    <div class="card"><h3>YouTube ショートへの自動投稿（無料）</h3>
+      <p id="ytStatus"></p>
+      <p><small>記事を公開したら、要点を5枚のスライドにし、AI の読み上げ（Google の音声合成・月100万文字まで無料）を付けた縦長の動画（40〜60秒）にして投稿します。概要欄には、記事に合った送り先（ここなら・U-Speak・LINE・note）とリンク集を入れます。</small></p>
+      <p><small><b>大事：</b>Google の審査（YouTube API の監査）を通るまで、自動で上げた動画は YouTube 側で「非公開」に固定されます。連携が済んだら、下の手順 5 の申請を出してください（無料・数週間）。</small></p>
+      <details><summary>連携のしかた（初回だけ・20分）</summary><ol>
+        <li><a href="https://console.cloud.google.com/auth/branding" target="_blank">Google Cloud の「OAuth 同意画面」</a>（プロジェクト top-footing-512918-n0）で、アプリ名 <code>U-Speak Auto Post</code>、対象「外部」で作成 →「対象」で<b>「アプリを公開」</b>（テストのままだと7日で連携が切れます）</li>
+        <li>「<a href="https://console.cloud.google.com/auth/clients" target="_blank">クライアント</a>」→「クライアントを作成」→ 種類「ウェブ アプリケーション」→「承認済みのリダイレクト URI」に下の URI を入れて作成</li>
+        <li>出てきた「クライアント ID」と「クライアント シークレット」を下に貼って「保存」</li>
+        <li>「YouTube と連携」→ YouTube チャンネルのある Google アカウントでログイン（「確認されていないアプリ」と出たら「詳細」→「移動」）→ 許可</li>
+        <li><a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank">YouTube API の監査フォーム</a>から申請（用途：自社チャンネルへの教育動画の自動投稿）。通るまでの動画は非公開のままです</li>
+      </ol><p id="ytRedirect"></p></details>
+      <div class="row">
+        <label><small>クライアント ID</small><input id="ytClient" autocomplete="off" placeholder="xxxx.apps.googleusercontent.com"></label>
+        <label><small>クライアント シークレット</small><input id="ytSecret" type="password" autocomplete="new-password"></label>
+      </div>
+      <label><input type="checkbox" id="cYtPub" style="width:auto"> 公開したら YouTube ショートに投稿する</label>
+      <div class="actions"><button class="btn primary" onclick="saveYoutube()">保存</button>
+        <button class="btn" onclick="location.href='/oauth/youtube/start'">YouTube と連携</button>
+        <button class="btn" onclick="act('/api/youtube/check', {}, 'YouTube の接続確認')">接続確認</button>
+        <button class="btn" onclick="ytPreview()">動画の見本を作る（投稿はしない）</button>
+        <button class="btn" onclick="confirm('一番新しい公開済みの記事を、今すぐ YouTube に投稿します。よいですか？') && act('/api/youtube/post', {}, 'YouTube に投稿')">最新の記事を今すぐ投稿</button></div>
+      <div id="ytPreview"></div>
+      <div class="scroll"><table id="ytLog"></table></div>
+    </div>
+
     <div class="card"><h3>LINE で「今週の記事」を配信（無料プランは月200通）</h3>
       <p id="lnStatus"></p>
       <details><summary>設定のしかた（初回だけ・10分）</summary><ol>
@@ -511,6 +536,10 @@ async function loadSocial() {
   $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
   $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
+  $("cYtPub").checked = st.youtubeOnPublish;
+  $("ytStatus").innerHTML = d.youtube.hasToken ? "<b>YouTube と連携済み</b>" : d.youtube.hasClient ? "<b>クライアントは保存済み。「YouTube と連携」を押してください。</b>" : "<b>まだ連携していません。</b>";
+  $("ytRedirect").innerHTML = `<small>リダイレクト URI：<code>${esc(d.youtube.redirectUri)}</code></small>`;
+  $("ytLog").innerHTML = d.youtube.log.map((l) => `<tr><td>${jst(l.at)}</td><td><a href="https://youtube.com/shorts/${esc(l.id)}" target="_blank">${esc(l.title)}</a></td><td>${l.seconds}秒${l.voiced ? "" : "（ナレーションなし）"}</td></tr>`).join("");
   $("cIgPub").checked = st.instagramOnPublish;
   $("igStatus").innerHTML = d.instagram.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("igLog").innerHTML = d.instagram.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${esc(l.cover || "")}</td><td><small>${esc((l.caption || "").slice(0, 80))}…</small></td></tr>`).join("");
@@ -564,6 +593,22 @@ async function igPreview() {
   try {
     const r = await api("/api/instagram/preview", "POST", {});
     $("igPreview").innerHTML = `<p><small>${esc(r.title)}</small></p><div class="shots">${r.images.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join("")}</div><pre style="white-space:pre-wrap;font-size:13px">${esc(r.caption)}</pre>`;
+    toast("見本ができました（投稿はしていません）");
+  } catch (e) { toast(`見本を作れません：${e.message}`, 8000); }
+}
+async function saveYoutube() {
+  try {
+    await api("/api/settings", "PUT", { youtubeOnPublish:$("cYtPub").checked });
+    if ($("ytClient").value.trim()) { await api("/api/youtube/client", "PUT", { clientId:$("ytClient").value, clientSecret:$("ytSecret").value }); $("ytClient").value = $("ytSecret").value = ""; toast("保存しました。次に「YouTube と連携」を押してください", 8000); }
+    else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function ytPreview() {
+  toast("動画の見本を作っています…（1〜2分）", 0);
+  try {
+    const r = await api("/api/youtube/preview", "POST", {});
+    $("ytPreview").innerHTML = `<p><small>${esc(r.title)}（${r.seconds}秒${r.voiced ? "" : "・ナレーションなし"}）</small></p><video src="${esc(r.video)}" controls style="width:270px;border-radius:12px"></video>`;
     toast("見本ができました（投稿はしていません）");
   } catch (e) { toast(`見本を作れません：${e.message}`, 8000); }
 }

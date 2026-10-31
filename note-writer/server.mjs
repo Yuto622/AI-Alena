@@ -20,6 +20,7 @@ import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "
 import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, renderLinks, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate, nextPostForBooks, addBooksToPost } from "./lib/blog.mjs";
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { hasRakuten, setRakutenKeys } from "./lib/books.mjs";
+import { YT_DIR, hasYoutubeClient, hasYoutubeToken, setYoutubeClient, authUrl, finishAuth, youtubeWhoAmI, getYoutubeLog, previewShort, postArticleToYoutube } from "./lib/youtube.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -103,6 +104,25 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(APP_DIR, "admin")));
+app.use("/yt", express.static(YT_DIR));
+
+// YouTube と連携（Google のログイン画面へ → 戻ってきたらトークンを保存）
+app.get("/oauth/youtube/start", (_req, res) => {
+  try {
+    res.redirect(302, authUrl());
+  } catch (e) {
+    res.status(400).send(e.message);
+  }
+});
+app.get("/oauth/youtube/callback", async (req, res) => {
+  try {
+    if (req.query.error) throw new Error(`Google のログインが取り消されました（${req.query.error}）`);
+    const me = await finishAuth({ code: String(req.query.code || ""), state: String(req.query.state || "") });
+    res.type("html").send(`<meta charset="utf-8"><p>YouTube チャンネル「${String(me.channel).replace(/[<>&]/g, "")}」と連携しました。このタブを閉じて、管理画面を再読み込みしてください。</p>`);
+  } catch (e) {
+    res.status(400).type("html").send(`<meta charset="utf-8"><p>連携できませんでした：${String(e.message).replace(/[<>&]/g, "")}</p>`);
+  }
+});
 app.use("/shots", express.static(paths.out));
 
 const wrap = (fn) => async (req, res) => {
@@ -176,6 +196,7 @@ app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
   instagram: { hasToken: hasInstagramToken(), log: getInstagramLog().slice(-20).reverse() },
+  youtube: { hasClient: hasYoutubeClient(), hasToken: hasYoutubeToken(), log: getYoutubeLog().slice(-20).reverse(), redirectUri: `${(process.env.PUBLIC_URL || "").replace(/\/$/, "")}/oauth/youtube/callback` },
   blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase(), rakuten: hasRakuten() },
 })));
 app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
@@ -197,6 +218,10 @@ app.post("/api/instagram/preview", wrap(async (req) => {
   return { title: article.title, caption: carousel.caption, images: files.map((f) => `/ig/${id}/${f}`) };
 }));
 app.post("/api/instagram/post", wrap((req) => postArticleToInstagram(igArticle(req.body.name))));
+app.put("/api/youtube/client", wrap((req) => setYoutubeClient(req.body)));
+app.post("/api/youtube/check", wrap(() => youtubeWhoAmI()));
+app.post("/api/youtube/preview", wrap((req) => previewShort(igArticle(req.body.name))));
+app.post("/api/youtube/post", wrap((req) => postArticleToYoutube(igArticle(req.body.name))));
 app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
 app.post("/api/line/check", wrap(() => lineWhoAmI()));
 app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));

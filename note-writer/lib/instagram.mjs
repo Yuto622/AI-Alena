@@ -85,7 +85,7 @@ const SCHEMA = {
 };
 
 // 最後のスライドと投稿文の締め（プロフィールのリンク集で、どのボタンを押してほしいか）
-const ENDINGS = {
+export const ENDINGS = {
   service: { eyebrow: "WORK WITH US", head: "AI・自動化の<br><span class=\"g\">ご相談</span>はこちら", text: "仕組みづくりの相談は、<br>プロフィールのリンクから。", caption: "AI や自動化の相談は、プロフィールのリンクから受け付けています。" },
   business: { eyebrow: "FOR ENGLISH SCHOOLS", head: "教室で使える<br><span class=\"g\">U-Speak</span>", text: "英語教室の方は、<br>プロフィールのリンクから説明会へ。", caption: "英語教室の方は、プロフィールのリンクから無料の説明を予約できます。" },
   line: { eyebrow: "FOLLOW ON LINE", head: "新しい記事を<br><span class=\"g\">LINE</span> で", text: "週1回、その週の記事が届きます。<br>プロフィールのリンクから。", caption: "新しい記事は LINE で週1回届きます。プロフィールのリンクから友だち追加できます。" },
@@ -102,7 +102,7 @@ export async function composeCarousel(article) {
 - 投稿文（caption）：全角300文字以内。1行目で誰の悩みが解決するかを書き、要点を軽く紹介する。最後の案内文は自動で付けるので書かない。URL は書かない
 - ハッシュタグ：# を付けない言葉で3〜5個（例：英検、海外大学、留学準備、AI活用）
 - 記事にないこと・筆者の経験にないことは書かない
-${article.price ? "- 有料記事なので、無料部分に書かれた範囲だけを使い、有料部分の中身は書かない\n" : ""}
+${article.price ? "- 有料記事なので、無料部分に書かれた範囲だけを使い、有料部分の中身は書かない\n" : ""}${article.topic === "trend" ? `- 話題枠の投稿：いま話題の「${[].concat(article.tags || [])[0]}」を表紙の見出しとハッシュタグの1つ目に入れる\n` : ""}
 ## 記事
 タイトル：${article.title}
 タグ：${[].concat(article.tags || []).join(", ")}
@@ -131,7 +131,8 @@ function palette(text) {
   return PALETTES[h % PALETTES.length];
 }
 
-export function slideHtml(slide, { title, tag, handle, index, total }) {
+// height：Instagram は 1350（4:5）、YouTube ショートは 1920（9:16）。video なら表紙の一言を動画向けにする
+export function slideHtml(slide, { title, tag, handle, index, total, height = 1350, video = false }) {
   const [a, b, c] = palette(title);
   const page = `<div class="page">${index} / ${total}</div>`;
   let inner;
@@ -139,7 +140,7 @@ export function slideHtml(slide, { title, tag, handle, index, total }) {
     const size = slide.text.length > 18 ? 92 : 108;
     inner = `<span class="eyebrow"><b></b>${esc(tag ? `#${tag}` : "UCLA × ENGLISH")}</span>
 <h1 style="font-size:${size}px">${esc(slide.text)}</h1>
-<p class="swipe">保存して、あとで見返してください →</p>`;
+<p class="swipe">${video ? "1分で要点をまとめます" : "保存して、あとで見返してください →"}</p>`;
   } else if (slide.kind === "point") {
     inner = `<div class="num">0${slide.n}</div>
 <h2>${esc(slide.heading)}</h2>
@@ -155,7 +156,7 @@ export function slideHtml(slide, { title, tag, handle, index, total }) {
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=block" rel="stylesheet">
 <style>
 *{margin:0;box-sizing:border-box}
-body{width:1080px;height:1350px;overflow:hidden;font-family:"Zen Kaku Gothic New","Noto Sans CJK JP","IPAGothic",sans-serif;color:#fff;background:#06070c;position:relative}
+body{width:1080px;height:${height}px;overflow:hidden;font-family:"Zen Kaku Gothic New","Noto Sans CJK JP","IPAGothic",sans-serif;color:#fff;background:#06070c;position:relative}
 .aur{position:absolute;inset:-80px;filter:blur(60px);background:radial-gradient(520px 520px at 10% 8%,${a}cc,transparent 60%),radial-gradient(560px 560px at 95% 20%,${b}bb,transparent 60%),radial-gradient(640px 640px at 70% 105%,${c}cc,transparent 60%)}
 .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);background-size:54px 54px;-webkit-mask-image:radial-gradient(ellipse at 40% 40%,#000,transparent 80%)}
 .in{position:absolute;inset:0;padding:110px 96px;display:flex;flex-direction:column;justify-content:center}
@@ -176,22 +177,22 @@ li{font-size:42px;font-weight:700;line-height:1.55;padding:22px 30px;border-radi
 <div class="foot">UCLA 在学生が書く 英語のはなし</div></body></html>`;
 }
 
-// 5枚の JPEG を作って IG_DIR/<id>/ に保存し、そのファイル名を返す
-export async function renderSlides(id, carousel, { title, tag, handle }) {
+// 5枚の JPEG を作って IG_DIR/<id>/ に保存し、そのファイル名を返す（YouTube 用は dir と height を変える）
+export async function renderSlides(id, carousel, { title, tag, handle, height = 1350, video = false, baseDir = IG_DIR }) {
   const slides = [
     { kind: "cover", text: carousel.cover },
     ...carousel.points.map((p, i) => ({ kind: "point", n: i + 1, heading: p.heading, lines: p.lines.slice(0, 3) })),
     { kind: "cta", ending: carousel.ending },
   ];
-  const dir = path.join(IG_DIR, id);
+  const dir = path.join(baseDir, id);
   fs.mkdirSync(dir, { recursive: true });
   const { chromium } = require("playwright");
   const browser = await chromium.launch();
   const files = [];
   try {
-    const page = await browser.newPage({ viewport: { width: 1080, height: 1350 } });
+    const page = await browser.newPage({ viewport: { width: 1080, height } });
     for (const [i, slide] of slides.entries()) {
-      await page.setContent(slideHtml(slide, { title, tag, handle, index: i + 1, total: slides.length }), { waitUntil: "networkidle", timeout: 20000 })
+      await page.setContent(slideHtml(slide, { title, tag, handle, index: i + 1, total: slides.length, height, video }), { waitUntil: "networkidle", timeout: 20000 })
         .catch(() => {});
       await page.evaluate(() => document.fonts.ready).catch(() => {});
       const name = `${i + 1}.jpg`;

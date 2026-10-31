@@ -38,3 +38,7 @@ note-writer/x-log.json
 note-writer/secrets.enc.json
 note-writer/stats-import.json
 note-writer/trends.json
+note-writer/ig/
+note-writer/yt/
+note-writer/blog/
+note-writer/*-log.json

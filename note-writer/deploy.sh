@@ -40,7 +40,8 @@ winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else pr
 
 gcloud config set project "$PROJECT" >/dev/null
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  cloudscheduler.googleapis.com secretmanager.googleapis.com storage.googleapis.com
+  cloudscheduler.googleapis.com secretmanager.googleapis.com storage.googleapis.com \
+  texttospeech.googleapis.com youtube.googleapis.com
 
 # データ置き場
 if ! gcloud storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
