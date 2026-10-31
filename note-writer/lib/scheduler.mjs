@@ -9,6 +9,7 @@ import { shouldScoutTrends, scoutTrends } from "./trends.mjs";
 import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./x.mjs";
 import { hasThreadsToken, postArticleToThreads, shouldPostThreadsDaily, getThreadsLog } from "./threads.mjs";
 import { shouldSendDigest, sendDigest } from "./line.mjs";
+import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
 import { nextArticleForBlog, writeBlogPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -77,6 +78,14 @@ export async function publishArticle(name, { mode = "publish", force = false } =
         result.threads = await postArticleToThreads({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
       } catch (e) {
         result.threadsError = e.message;
+      }
+    }
+    if (instagramEnabled()) {
+      try {
+        const { meta, body } = readArticleSource(name);
+        result.instagram = await postArticleToInstagram({ ...meta, name, body, url: result.url, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+      } catch (e) {
+        result.instagramError = e.message;
       }
     }
   }

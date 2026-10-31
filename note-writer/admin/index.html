@@ -184,6 +184,26 @@
       <div class="scroll"><table id="thLog"></table></div>
     </div>
 
+    <div class="card"><h3>Instagram への自動投稿（無料）</h3>
+      <p id="igStatus"></p>
+      <p><small>記事を公開したら、要点を5枚のスライド画像（表紙・要点3つ・「続きは note で」）にして投稿します。画像はサーバーで描くので費用0円。Instagram の投稿文のリンクは押せないので、「プロフィールのリンクから」と案内します（プロフィールのリンクにブログか note を入れておいてください）。</small></p>
+      <details><summary>アクセストークンの取り方（初回だけ・15分）</summary><ol>
+        <li>Instagram アプリで、アカウントを「<b>プロアカウント</b>」（ビジネスかクリエイター）に切り替える（設定 → アカウントの種類とツール）</li>
+        <li><a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers</a> の「U-Speak Auto Post」→「ユースケース」→「<b>ユースケースを追加</b>」→「Instagram でメッセージとコンテンツを管理」</li>
+        <li>そのユースケースの「カスタマイズ」→「<b>Instagram ログインによる API 設定</b>」→「アクセストークンを生成する」で「アカウントを追加」し、Instagram でログインして許可</li>
+        <li>テスターの招待が届いたら、Instagram の「設定 → ウェブサイトのアクセス許可（アプリとウェブサイト）→ テスターへの招待」で承認</li>
+        <li>もう一度「トークンを生成」を押し、出てきた文字列を下に貼る</li>
+      </ol><small>トークンは60日で切れますが、このシステムが7日ごとに自動で延長します。</small></details>
+      <div class="row"><label><small>アクセストークン</small><input id="igToken" type="password" autocomplete="new-password"></label></div>
+      <label><input type="checkbox" id="cIgPub" style="width:auto"> 公開したら Instagram に投稿する</label>
+      <div class="actions"><button class="btn primary" onclick="saveInstagram()">保存</button>
+        <button class="btn" onclick="act('/api/instagram/check', {}, 'Instagram の接続確認')">接続確認（投稿はしない）</button>
+        <button class="btn" onclick="igPreview()">スライドの見本を作る（投稿はしない）</button>
+        <button class="btn" onclick="confirm('一番新しい公開済みの記事を、今すぐ Instagram に投稿します。よいですか？') && act('/api/instagram/post', {}, 'Instagram に投稿')">最新の記事を今すぐ投稿</button></div>
+      <div id="igPreview"></div>
+      <div class="scroll"><table id="igLog"></table></div>
+    </div>
+
     <div class="card"><h3>LINE で「今週の記事」を配信（無料プランは月200通）</h3>
       <p id="lnStatus"></p>
       <details><summary>設定のしかた（初回だけ・10分）</summary><ol>
@@ -469,6 +489,9 @@ async function loadSocial() {
   $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
   $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
+  $("cIgPub").checked = st.instagramOnPublish;
+  $("igStatus").innerHTML = d.instagram.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
+  $("igLog").innerHTML = d.instagram.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${esc(l.cover || "")}</td><td><small>${esc((l.caption || "").slice(0, 80))}…</small></td></tr>`).join("");
   $("lnStatus").innerHTML = d.line.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("lnLog").innerHTML = d.line.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.sent ? `送信（${l.count} 本${l.people != null ? `・${l.people} 人` : ""}）` : "見送り"}</td><td><small>${esc(l.reason || l.text || "")}</small></td></tr>`).join("");
   const base = d.blog.base;
@@ -501,6 +524,22 @@ async function saveThreads() {
     else toast("保存しました");
     loadSocial();
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function saveInstagram() {
+  try {
+    await api("/api/settings", "PUT", { instagramOnPublish:$("cIgPub").checked });
+    if ($("igToken").value.trim()) { const r = await api("/api/instagram/token", "PUT", { token:$("igToken").value }); $("igToken").value = ""; toast(`保存しました（@${r.username}）`); }
+    else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function igPreview() {
+  toast("スライドの見本を作っています…（30秒ほど）", 0);
+  try {
+    const r = await api("/api/instagram/preview", "POST", {});
+    $("igPreview").innerHTML = `<p><small>${esc(r.title)}</small></p><div class="shots">${r.images.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join("")}</div><pre style="white-space:pre-wrap;font-size:13px">${esc(r.caption)}</pre>`;
+    toast("見本ができました（投稿はしていません）");
+  } catch (e) { toast(`見本を作れません：${e.message}`, 8000); }
 }
 async function saveLine() {
   try {

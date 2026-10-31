@@ -18,6 +18,7 @@ import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "
 import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
 import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
 import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate } from "./lib/blog.mjs";
+import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -82,6 +83,14 @@ app.get("/blog/:slug", (req, res) => {
 });
 app.get("/sitemap.xml", (_req, res) => res.type("application/xml").send(sitemap()));
 app.get("/robots.txt", (_req, res) => res.type("text/plain").send(robots()));
+
+// Instagram に渡すスライド画像（Instagram のサーバーが取りに来るので誰でも開ける）
+app.get("/ig/:id/:file", (req, res) => {
+  if (!/^[a-z0-9]+$/.test(req.params.id) || !/^\d\.jpg$/.test(req.params.file)) return res.status(404).end();
+  const file = path.join(IG_DIR, req.params.id, req.params.file);
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.type("jpeg").sendFile(file);
+});
 
 // ここから下は管理画面（Basic 認証）
 app.use((req, res, next) => {
@@ -164,10 +173,28 @@ app.post("/api/x/post", wrap(async (req) => {
 app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
+  instagram: { hasToken: hasInstagramToken(), log: getInstagramLog().slice(-20).reverse() },
   blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase() },
 })));
 app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
 app.post("/api/threads/check", wrap(() => threadsWhoAmI()));
+app.put("/api/instagram/token", wrap((req) => setInstagramToken(req.body.token)));
+app.post("/api/instagram/check", wrap(() => instagramWhoAmI()));
+// 一番新しい公開済みの記事（または指定の記事）で、スライドの見本だけ作る（投稿しない）
+const igArticle = (name) => {
+  const a = name ? listArticles().find((x) => x.name === name) : listArticles().filter((x) => x.status === "published").at(-1);
+  if (!a) throw new Error("公開済みの記事がありません");
+  const { meta, body } = readArticleSource(a.name);
+  return { ...meta, name: a.name, body, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags].filter(Boolean) };
+};
+app.post("/api/instagram/preview", wrap(async (req) => {
+  const article = igArticle(req.body.name);
+  const carousel = await composeCarousel(article);
+  const id = `p${Date.now().toString(36)}`;
+  const files = await renderSlides(id, carousel, { title: article.title, tag: article.tags[0], handle: instagramHandle() });
+  return { title: article.title, caption: carousel.caption, images: files.map((f) => `/ig/${id}/${f}`) };
+}));
+app.post("/api/instagram/post", wrap((req) => postArticleToInstagram(igArticle(req.body.name))));
 app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
 app.post("/api/line/check", wrap(() => lineWhoAmI()));
 app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));

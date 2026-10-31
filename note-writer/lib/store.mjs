@@ -48,6 +48,8 @@ export const DEFAULT_SETTINGS = {
   threadsOnPublish: true,
   threadsDailyPromo: true,
   threadsDailyHour: 19,
+  // Instagram：公開したら、記事の要点を5枚のスライドにして投稿する
+  instagramOnPublish: true,
   // LINE：友だち追加の URL（記事の最後に案内を付ける）と、週1回の「今週の記事」配信（曜日 0=日曜、日本時間の何時以降か）
   lineAddUrl: "",
   lineDigest: true,
