@@ -240,6 +240,23 @@
         <label><small>会社のドメインで出す（DNS の設定が済んでから入れる）</small><input id="cBlogDomain" placeholder="blog.uspeaklab.org"></label>
       </div>
       <label><input type="checkbox" id="cBlog" style="width:auto"> ブログを作る</label>
+      <h3 style="margin-top:20px">本の紹介（全自動）</h3>
+      <p id="rkStatus"></p>
+      <p><small>ブログ記事ごとに、AI が検索の言葉を考え、楽天ブックスで実際に売れている本を探し、記事に合うものだけを 0〜2 冊選んで紹介します（ない本は紹介しません）。リンクは楽天アフィリエイト。Amazon のトラッキング ID があれば「Amazon で見る」も付けます。</small></p>
+      <details><summary>楽天のキーの取り方（初回だけ・10分）</summary><ol>
+        <li><a href="https://webservice.rakuten.co.jp/" target="_blank">楽天ウェブサービス</a>に楽天会員でログイン →「アプリ ID 発行」→ アプリ名 <code>U-Speak Blog</code>、アプリの URL に <code>https://blog.uspeaklab.org</code> を入れて発行</li>
+        <li>表示された「<b>アプリケーション ID</b>」と「<b>アクセスキー</b>」をコピー</li>
+        <li><a href="https://affiliate.rakuten.co.jp/" target="_blank">楽天アフィリエイト</a>に登録（審査なし・すぐ使える）→ 楽天ウェブサービスの同じ画面に出る「<b>アフィリエイト ID</b>」をコピー</li>
+        <li>下の3つの欄に貼って「楽天のキーを保存」→ 本の名前が3つ出れば成功</li>
+      </ol></details>
+      <div class="row">
+        <label><small>アプリケーション ID</small><input id="rkApp" autocomplete="off"></label>
+        <label><small>アクセスキー</small><input id="rkKey" type="password" autocomplete="new-password"></label>
+        <label><small>楽天アフィリエイト ID</small><input id="rkAff" autocomplete="off"></label>
+        <label><small>Amazon のトラッキング ID（任意・例：uspeaklab-22）</small><input id="cAmazon" placeholder="xxxx-22"></label>
+      </div>
+      <div class="actions"><button class="btn primary" onclick="saveRakuten()">楽天のキーを保存</button>
+        <button class="btn" onclick="act('/api/books/next', {}, '過去のブログ記事に本を付ける')">過去のブログ記事に本を付ける（1本）</button></div>
       <label><small>アフィリエイト（1行に1つ：「名前 | URL | どんな記事に合うか」。合う記事にだけ AI が入れ、「PR」と表示します）</small>
         <textarea id="cAffiliates" style="min-height:90px" placeholder="英検5級 でる順パス単 | https://amzn.to/xxxx | 子どもの英検・単語の覚え方"></textarea></label>
       <div class="actions"><button class="btn primary" onclick="saveSocial()">保存</button>
@@ -499,6 +516,8 @@ async function loadSocial() {
   $("igLog").innerHTML = d.instagram.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${esc(l.cover || "")}</td><td><small>${esc((l.caption || "").slice(0, 80))}…</small></td></tr>`).join("");
   $("lnStatus").innerHTML = d.line.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("lnLog").innerHTML = d.line.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.sent ? `送信（${l.count} 本${l.people != null ? `・${l.people} 人` : ""}）` : "見送り"}</td><td><small>${esc(l.reason || l.text || "")}</small></td></tr>`).join("");
+  $("rkStatus").innerHTML = d.blog.rakuten ? "<b>楽天のキー設定済み</b>（ブログ記事を作るたびに本を選びます）" : "<b>まだ楽天のキーが設定されていません。</b>";
+  $("cAmazon").value = st.amazonTag || "";
   const base = d.blog.base;
   $("blStatus").innerHTML = base ? `ブログ：<a href="${esc(base)}/blog" target="_blank">${esc(base)}/blog</a>　／ Search Console に登録するサイトマップ：<code>${esc(base)}/sitemap.xml</code>` : "";
   $("blList").innerHTML = "<tr><th>日付</th><th>記事</th><th>PR</th><th></th></tr>" + d.blog.posts.map((p) =>
@@ -557,6 +576,19 @@ async function saveLine() {
     else toast("保存しました");
     loadSocial();
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
+async function saveRakuten() {
+  try {
+    const tag = $("cAmazon").value.trim();
+    if (tag && !/^[\w-]+-2\d$/.test(tag)) throw new Error("Amazon のトラッキング ID は「xxxx-22」の形です");
+    await api("/api/settings", "PUT", { amazonTag:tag });
+    if ($("rkApp").value.trim() || $("rkKey").value.trim()) {
+      const r = await api("/api/rakuten/keys", "PUT", { applicationId:$("rkApp").value, accessKey:$("rkKey").value, affiliateId:$("rkAff").value });
+      ["rkApp","rkKey","rkAff"].forEach((id) => $(id).value = "");
+      toast(`保存しました。楽天で見つかった本：${r.sample.join(" / ")}${r.affiliate ? "" : "\n（アフィリエイト ID がないので、報酬は発生しません）"}`, 10000);
+    } else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 10000); }
 }
 async function removeBlog(slug) {
   if (!confirm("このブログ記事を消します。次の自動実行で書き直されます。よいですか？")) return;

@@ -66,6 +66,8 @@ export const DEFAULT_SETTINGS = {
   affiliates: [],
   // ブログを会社のドメインで出すとき（例：blog.uspeaklab.org）。DNS と Cloud Run のドメイン設定が済んでから入れる
   blogDomain: "",
+  // Amazon アソシエイトのトラッキング ID（例：uspeaklab-22）。あれば本に「Amazon で見る」も付ける
+  amazonTag: "",
   // Google Search Console の「HTML タグ」の content の値
   googleVerification: "",
 };

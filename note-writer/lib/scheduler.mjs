@@ -10,7 +10,7 @@ import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./
 import { hasThreadsToken, postArticleToThreads, shouldPostThreadsDaily, getThreadsLog } from "./threads.mjs";
 import { shouldSendDigest, sendDigest } from "./line.mjs";
 import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
-import { nextArticleForBlog, writeBlogPost } from "./blog.mjs";
+import { nextArticleForBlog, writeBlogPost, nextPostForBooks, addBooksToPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
 import { getSettings, getTopics, saveTopics } from "./store.mjs";
@@ -244,6 +244,16 @@ export async function tick(now = new Date()) {
       report.blog = await writeBlogPost(forBlog.name);
     } catch (e) {
       report.errors.push(`ブログの作成失敗: ${e.message}`);
+    }
+  } else {
+    // 新しく作る記事がなければ、本をまだ選んでいない過去のブログ記事に1本ずつ本を付ける
+    const forBooks = nextPostForBooks();
+    if (forBooks) {
+      try {
+        report.books = await addBooksToPost(forBooks.slug);
+      } catch (e) {
+        report.errors.push(`本の選定失敗: ${e.message}`);
+      }
     }
   }
   // 週に1回、実績から学びをまとめ直す（中で1週間たったかを見ている）

@@ -9,6 +9,7 @@ import { getSettings, readJson, writeJson } from "./store.mjs";
 import { listArticles, readArticleSource, markdownToBlocks, PAID_MARKER } from "./article.mjs";
 import { appCtaMarkdown } from "./apps.mjs";
 import { linkItems } from "./destinations.mjs";
+import { hasRakuten, pickBooks } from "./books.mjs";
 
 const DIR = path.join(DATA_DIR, "blog");
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -138,11 +139,39 @@ ${free.slice(0, 12000)}`, SCHEMA);
     paid: isPaid,
     app: meta.app && meta.app !== "none" ? meta.app : "",
     affiliates: picked,
+    books: [],
     at: new Date().toISOString(),
   };
+  // 記事に合う本を楽天ブックスから選ぶ（失敗してもブログ記事は作る）
+  await addBooks(post, free).catch((e) => console.error(`本の選定に失敗：${e.message}`));
+  savePost(post);
+  return { slug, title: post.title, affiliates: picked.length, books: post.books.length };
+}
+
+function savePost(post) {
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(path.join(DIR, `${slug}.json`), JSON.stringify(post, null, 2) + "\n");
-  return { slug, title: post.title, affiliates: picked.length };
+  fs.writeFileSync(path.join(DIR, `${post.slug}.json`), JSON.stringify(post, null, 2) + "\n");
+}
+
+async function addBooks(post, text) {
+  if (!hasRakuten()) return;
+  post.books = await pickBooks({ title: post.title, tags: post.tags, text: text || post.body });
+  post.booksCheckedAt = new Date().toISOString();
+}
+
+// 本をまだ選んでいないブログ記事（楽天を設定する前に作った記事など）
+export function nextPostForBooks() {
+  if (!hasRakuten()) return null;
+  return getBlogPosts().filter((p) => !p.booksCheckedAt).sort((a, b) => a.at.localeCompare(b.at))[0] || null;
+}
+
+// 既存のブログ記事に本を付ける（1回に1本）
+export async function addBooksToPost(slug) {
+  const post = getBlogPost(slug);
+  if (!post) throw new Error("ブログ記事が見つかりません");
+  await addBooks(post, post.body);
+  savePost(post);
+  return { slug, title: post.title, books: (post.books || []).map((b) => b.name) };
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -259,6 +288,7 @@ article.prose strong{background:linear-gradient(transparent 62%,rgba(122,162,255
 .panel.cta{background:linear-gradient(var(--bg2),var(--bg2)) padding-box,var(--g) border-box;border:1.5px solid transparent;text-align:center}
 .panel.cta p{color:var(--muted)}
 .panel ul{padding-left:1.2em}
+.books{display:flex;flex-direction:column;gap:20px}.book{display:flex;gap:18px;align-items:flex-start}.book img{width:96px;border-radius:8px;box-shadow:0 10px 30px -10px rgba(0,0,0,.6)}.book .btn{margin:4px 6px 0 0}
 .related{padding:20px 0 60px}.related h2{font-size:22px;margin-bottom:20px}
 footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--muted);font-size:13px}
 footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between}
@@ -337,7 +367,9 @@ export function renderPost(post) {
   const ctaFile = path.join(paths.cta, "default.md");
   const cta = fs.existsSync(ctaFile) ? fs.readFileSync(ctaFile, "utf8") : "";
   const app = post.app ? appCtaMarkdown(post.app, `blog:${post.slug}`) : "";
-  const amazon = post.affiliates.some((a) => /amazon\.|amzn\./.test(a.url));
+  const books = post.books || [];
+  const amazon = post.affiliates.some((a) => /amazon\.|amzn\./.test(a.url)) || books.some((b) => b.amazonUrl);
+  const pr = post.affiliates.length || books.length;
   const { html, toc } = withToc(markdownToBlocks(post.body).join("\n"));
   const all = getBlogPosts();
   const mine = new Set(post.tags || []);
@@ -358,7 +390,7 @@ export function renderPost(post) {
     },
     body: `<section class="post-hero cover" style="${coverStyle(post.title)}"><span class="glyph">${esc(((post.tags || [])[0] || "").slice(0, 6))}</span>
 <div class="wrap">
-<div class="meta">${(post.tags || []).slice(0, 4).map((t) => `<a class="chip" href="${esc(base())}/blog?tag=${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}${post.affiliates.length ? '<span class="pr">PR：アフィリエイトリンクを含みます</span>' : ""}</div>
+<div class="meta">${(post.tags || []).slice(0, 4).map((t) => `<a class="chip" href="${esc(base())}/blog?tag=${encodeURIComponent(t)}">#${esc(t)}</a>`).join("")}${pr ? '<span class="pr">PR：アフィリエイトリンクを含みます</span>' : ""}</div>
 <h1>${esc(post.title)}</h1>
 <div class="meta"><span>${dateJa(post.at)}</span><span>・</span><span>${minutes(post.body)} 分で読めます</span></div>
 </div></section>
@@ -372,6 +404,11 @@ export function renderPost(post) {
 </div>
 ${post.affiliates.length ? `<div class="panel"><h3>この記事で紹介したもの</h3><ul>${post.affiliates.map((a) =>
     `<li><a href="${esc(a.url)}" rel="sponsored noopener" target="_blank"><b>${esc(a.name)}</b></a><br><small>${esc(a.note)}</small></li>`).join("")}</ul></div>` : ""}
+${books.length ? `<div class="panel"><h3>この記事に合う本</h3><div class="books">${books.map((b) => `<div class="book">
+${b.image ? `<a href="${esc(b.url)}" rel="sponsored noopener" target="_blank"><img src="${esc(b.image)}" alt="${esc(b.name)}" loading="lazy"></a>` : ""}
+<div><b>${esc(b.name)}</b><br><small class="meta">${esc(b.author || "")}</small><p style="margin:8px 0;font-size:15px;line-height:1.7">${esc(b.note)}</p>
+<a class="btn ghost" style="padding:8px 16px;font-size:14px" href="${esc(b.url)}" rel="sponsored noopener" target="_blank">楽天で見る</a>
+${b.amazonUrl ? `<a class="btn ghost" style="padding:8px 16px;font-size:14px" href="${esc(b.amazonUrl)}" rel="sponsored noopener" target="_blank">Amazon で見る</a>` : ""}</div></div>`).join("")}</div></div>` : ""}
 ${app ? `<div class="panel">${markdownToBlocks(app.replace(/^---\s*/, "")).join("")}</div>` : ""}
 ${cta ? `<div class="panel">${markdownToBlocks(cta).join("")}</div>` : ""}
 ${s.lineAddUrl ? `<div class="panel cta"><h3>新しい記事を、週1回 LINE で</h3><p>その週の記事だけをまとめて届けます。</p><a class="btn ghost" href="${esc(s.lineAddUrl)}" target="_blank" rel="noopener">LINE で受け取る</a></div>` : ""}
@@ -422,10 +459,10 @@ const ABOUT = `## 運営者情報
 
 ## 広告・アフィリエイトについて
 
-このブログは、アフィリエイトプログラム（Amazon アソシエイト、もしもアフィリエイト、A8.net など）を利用しています。記事の中で紹介した商品のリンクから購入や申し込みがあると、運営者に報酬が支払われることがあります。
+このブログは、アフィリエイトプログラム（Amazon アソシエイト、楽天アフィリエイト、もしもアフィリエイト、A8.net など）を利用しています。記事の中で紹介した商品のリンクから購入や申し込みがあると、運営者に報酬が支払われることがあります。
 
 - アフィリエイトリンクを含む記事には、記事の冒頭に「PR」と表示します
-- 紹介する商品は、記事の内容に合うものだけを選びます。報酬の有無や額によって、記事の内容や評価を変えることはありません
+- 紹介する商品は、記事の内容に合うものだけを選びます。本は、楽天ブックスで実際に販売されているものの中から選んでいます。報酬の有無や額によって、記事の内容や評価を変えることはありません
 - Amazon のアソシエイトとして、当サイトは適格販売により収入を得ています
 
 また、運営者が提供する英語学習アプリ・教材・サービスを紹介することがあります。

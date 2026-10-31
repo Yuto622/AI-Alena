@@ -17,8 +17,9 @@ import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
 import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
-import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, renderLinks, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate } from "./lib/blog.mjs";
+import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, renderLinks, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate, nextPostForBooks, addBooksToPost } from "./lib/blog.mjs";
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
+import { hasRakuten, setRakutenKeys } from "./lib/books.mjs";
 import { createRequire } from "module";
 import {
   getSettings, saveSettings, getPublished, getSales, upsertSales, getTopics, saveTopics,
@@ -175,7 +176,7 @@ app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
   instagram: { hasToken: hasInstagramToken(), log: getInstagramLog().slice(-20).reverse() },
-  blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase() },
+  blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase(), rakuten: hasRakuten() },
 })));
 app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
 app.post("/api/threads/check", wrap(() => threadsWhoAmI()));
@@ -203,6 +204,12 @@ app.post("/api/blog/write", wrap(async () => {
   const next = nextArticleForBlog({ manual: true });
   if (!next) throw new Error(whyNoBlogCandidate());
   return writeBlogPost(next.name);
+}));
+app.put("/api/rakuten/keys", wrap((req) => setRakutenKeys(req.body)));
+app.post("/api/books/next", wrap(async () => {
+  const post = nextPostForBooks();
+  if (!post) throw new Error(hasRakuten() ? "本を選んでいないブログ記事はありません" : "楽天のアプリケーション ID とアクセスキーを先に保存してください");
+  return addBooksToPost(post.slug);
 }));
 app.delete("/api/blog/:slug", wrap((req) => {
   if (!getBlogPost(req.params.slug)) throw new Error("見つかりません");
