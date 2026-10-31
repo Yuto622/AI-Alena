@@ -67,7 +67,8 @@ export async function xWhoAmI() {
 
 // 記事の紹介文を、一番安いモデルで作る（URL は後ろに付ける）
 // platform: "threads" なら Threads 向けに少し長め（500文字まで投稿できる）
-export async function composePost(article, { again = false, platform = "x" } = {}) {
+// destination：リンク先が note の記事でないとき（snsDestination の結果）。投稿文の締めをリンク先に合わせる
+export async function composePost(article, { again = false, platform = "x", destination = null } = {}) {
   const { askJson } = await import("./generator.mjs");
   const threads = platform === "threads";
   const limit = threads ? 200 : 90;
@@ -76,7 +77,7 @@ export async function composePost(article, { again = false, platform = "x" } = {
 - 1行目で「誰の、どんな悩みが解決するか」をはっきり書く。煽りすぎない
 - 記事にないこと・筆者の経験にないことは書かない
 - ${threads ? "ハッシュタグは最後に1個だけ（Threads はトピックタグを1つしか付けられない）。記事のテーマを表す短い言葉で（例：#英検 #海外大学 #AI活用）" : "ハッシュタグは最後に1〜2個まで"}
-${again ? "- 以前にも紹介した記事なので、前回とは違う切り口で\n" : ""}
+${again ? "- 以前にも紹介した記事なので、前回とは違う切り口で\n" : ""}${destination && destination.kind !== "note" ? `- リンク先は記事ではなく「${destination.description}」。記事の悩みに触れたうえで、最後の行で自然にそこへつなぐ（売り込みすぎない）\n` : ""}
 ## 記事
 タイトル：${article.title}
 価格：${article.price ? `${article.price}円（有料）` : "無料"}

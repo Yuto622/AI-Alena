@@ -48,6 +48,10 @@ export const DEFAULT_SETTINGS = {
   threadsOnPublish: true,
   threadsDailyPromo: true,
   threadsDailyHour: 19,
+  // SNS の投稿のリンクを、記事に選ばれたサービス（ここなら・U-Speak）に直接向ける。false なら全部 note の記事へ
+  snsSmartLink: true,
+  // リンク集（/links）に置く、ここなら（ココナラ）のプロフィールの URL
+  coconalaProfileUrl: "",
   // Instagram：公開したら、記事の要点を5枚のスライドにして投稿する
   instagramOnPublish: true,
   // LINE：友だち追加の URL（記事の最後に案内を付ける）と、週1回の「今週の記事」配信（曜日 0=日曜、日本時間の何時以降か）

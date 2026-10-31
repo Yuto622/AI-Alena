@@ -17,7 +17,7 @@ import { getTrendLog, scoutTrends } from "./lib/trends.mjs";
 import { hasXKeys, setXKeys, getXLog, xWhoAmI, composePost, postArticle } from "./lib/x.mjs";
 import { hasThreadsToken, setThreadsToken, threadsWhoAmI, getThreadsLog } from "./lib/threads.mjs";
 import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "./lib/line.mjs";
-import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate } from "./lib/blog.mjs";
+import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, renderLinks, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate } from "./lib/blog.mjs";
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { createRequire } from "module";
 import {
@@ -63,7 +63,7 @@ app.use((req, res, next) => {
   const domain = getSettings().blogDomain;
   if (!domain) return next();
   const host = (req.get("host") || "").toLowerCase();
-  const isBlogPath = req.path === "/blog" || req.path.startsWith("/blog/") || req.path === "/sitemap.xml" || req.path === "/robots.txt";
+  const isBlogPath = req.path === "/blog" || req.path.startsWith("/blog/") || req.path === "/links" || req.path === "/sitemap.xml" || req.path === "/robots.txt";
   if (host === domain) {
     if (req.path === "/") return res.redirect(301, "/blog");
     if (isBlogPath || req.path.startsWith("/go/") || req.path === "/healthz") return next();
@@ -76,6 +76,7 @@ app.use((req, res, next) => {
 // ブログ（誰でも読める。検索エンジン向けの sitemap.xml と robots.txt も）
 app.get("/blog", (req, res) => res.type("html").send(renderIndex({ tag: String(req.query.tag || "").slice(0, 50) })));
 app.get("/blog/about", (_req, res) => res.type("html").send(renderAbout()));
+app.get("/links", (_req, res) => res.type("html").send(renderLinks()));
 app.get("/blog/:slug", (req, res) => {
   const post = getBlogPost(req.params.slug);
   if (!post) return res.status(404).type("html").send(renderIndex());

@@ -9,6 +9,7 @@ import { createRequire } from "module";
 import { DATA_DIR } from "./config.mjs";
 import { readJson, writeJson, getSettings } from "./store.mjs";
 import { loadSecret, saveSecret } from "./credentials.mjs";
+import { snsDestination } from "./destinations.mjs";
 
 const require = createRequire(import.meta.url);
 const LOG = path.join(DATA_DIR, "instagram-log.json");
@@ -83,6 +84,14 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
+// 最後のスライドと投稿文の締め（プロフィールのリンク集で、どのボタンを押してほしいか）
+const ENDINGS = {
+  service: { eyebrow: "WORK WITH US", head: "AI・自動化の<br><span class=\"g\">ご相談</span>はこちら", text: "仕組みづくりの相談は、<br>プロフィールのリンクから。", caption: "AI や自動化の相談は、プロフィールのリンクから受け付けています。" },
+  business: { eyebrow: "FOR ENGLISH SCHOOLS", head: "教室で使える<br><span class=\"g\">U-Speak</span>", text: "英語教室の方は、<br>プロフィールのリンクから説明会へ。", caption: "英語教室の方は、プロフィールのリンクから無料の説明を予約できます。" },
+  line: { eyebrow: "FOLLOW ON LINE", head: "新しい記事を<br><span class=\"g\">LINE</span> で", text: "週1回、その週の記事が届きます。<br>プロフィールのリンクから。", caption: "新しい記事は LINE で週1回届きます。プロフィールのリンクから友だち追加できます。" },
+  note: { eyebrow: "MORE ON NOTE", head: "続きは<br><span class=\"g\">note</span> で", text: "具体的な手順や例は、<br>プロフィールのリンクから読めます。", caption: "詳しくはプロフィールのリンク（note）から。" },
+};
+
 export async function composeCarousel(article) {
   const { askJson } = await import("./generator.mjs");
   const free = String(article.body || "").split("<!-- paid -->")[0];
@@ -90,7 +99,7 @@ export async function composeCarousel(article) {
 - 1枚目（cover）：読者が「自分のことだ」と思う見出し。全角24文字以内
 - 2〜4枚目（points）：記事の要点を3つ。各スライドは見出し（全角16文字以内）と、短い文を2〜3行（1行全角22文字以内）
 - 5枚目は「続きは note で」の案内を自動で付けるので、書かない
-- 投稿文（caption）：全角300文字以内。1行目で誰の悩みが解決するかを書き、要点を軽く紹介し、最後に「詳しくはプロフィールのリンク（note）から」と書く。URL は書かない
+- 投稿文（caption）：全角300文字以内。1行目で誰の悩みが解決するかを書き、要点を軽く紹介する。最後の案内文は自動で付けるので書かない。URL は書かない
 - ハッシュタグ：# を付けない言葉で3〜5個（例：英検、海外大学、留学準備、AI活用）
 - 記事にないこと・筆者の経験にないことは書かない
 ${article.price ? "- 有料記事なので、無料部分に書かれた範囲だけを使い、有料部分の中身は書かない\n" : ""}
@@ -99,11 +108,13 @@ ${article.price ? "- 有料記事なので、無料部分に書かれた範囲�
 タグ：${[].concat(article.tags || []).join(", ")}
 
 ${free.slice(0, 8000)}`, SCHEMA);
+  const ending = ENDINGS[snsDestination(article).kind] || ENDINGS.note;
   const tags = (r.hashtags || []).map((t) => String(t).replace(/^#+/, "").replace(/\s+/g, "")).filter(Boolean).slice(0, 5);
   return {
     cover: r.cover,
     points: (r.points || []).slice(0, 3),
-    caption: `${r.caption.trim()}\n\n${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2100),
+    caption: `${r.caption.trim()}\n\n${ending.caption}\n\n${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2100),
+    ending,
   };
 }
 
@@ -134,9 +145,10 @@ export function slideHtml(slide, { title, tag, handle, index, total }) {
 <h2>${esc(slide.heading)}</h2>
 <ul>${slide.lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
   } else {
-    inner = `<span class="eyebrow"><b></b>MORE ON NOTE</span>
-<h1 style="font-size:88px">続きは<br><span class="g">note</span> で</h1>
-<p class="big">具体的な手順や例は、<br>プロフィールのリンクから読めます。</p>
+    const e = slide.ending || ENDINGS.note;
+    inner = `<span class="eyebrow"><b></b>${e.eyebrow}</span>
+<h1 style="font-size:88px">${e.head}</h1>
+<p class="big">${e.text}</p>
 <p class="handle">@${esc(handle)}</p>`;
   }
   return `<!doctype html><html><head><meta charset="utf-8">
@@ -169,7 +181,7 @@ export async function renderSlides(id, carousel, { title, tag, handle }) {
   const slides = [
     { kind: "cover", text: carousel.cover },
     ...carousel.points.map((p, i) => ({ kind: "point", n: i + 1, heading: p.heading, lines: p.lines.slice(0, 3) })),
-    { kind: "cta" },
+    { kind: "cta", ending: carousel.ending },
   ];
   const dir = path.join(IG_DIR, id);
   fs.mkdirSync(dir, { recursive: true });

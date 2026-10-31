@@ -8,6 +8,7 @@ import { DATA_DIR } from "./config.mjs";
 import { readJson, writeJson, getSettings } from "./store.mjs";
 import { loadSecret, saveSecret } from "./credentials.mjs";
 import { composePost } from "./x.mjs";
+import { snsDestination } from "./destinations.mjs";
 
 const LOG = path.join(DATA_DIR, "threads-log.json");
 const API = process.env.THREADS_API_BASE || "https://graph.threads.net";
@@ -74,10 +75,12 @@ export async function postToThreads(text) {
 
 export async function postArticleToThreads(article, { again = false } = {}) {
   if (!article.url) throw new Error("記事の URL がありません");
-  const text = `${await composePost(article, { again, platform: "threads" })}\n\n${article.url}`;
+  // 記事の読者に合わせて、ここなら・U-Speak・LINE・note のどれかへ送る
+  const destination = snsDestination(article);
+  const text = `${await composePost(article, { again, platform: "threads", destination })}\n\n${destination.url}`;
   const id = await postToThreads(text);
   const log = getThreadsLog();
-  log.push({ name: article.name, id, text, again, at: new Date().toISOString() });
+  log.push({ name: article.name, id, text, again, to: destination.kind, at: new Date().toISOString() });
   writeJson(LOG, log.slice(-1000));
   return { id, text };
 }

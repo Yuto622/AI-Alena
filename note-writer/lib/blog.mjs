@@ -8,6 +8,7 @@ import { DATA_DIR, paths } from "./config.mjs";
 import { getSettings, readJson, writeJson } from "./store.mjs";
 import { listArticles, readArticleSource, markdownToBlocks, PAID_MARKER } from "./article.mjs";
 import { appCtaMarkdown } from "./apps.mjs";
+import { linkItems } from "./destinations.mjs";
 
 const DIR = path.join(DATA_DIR, "blog");
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -472,6 +473,26 @@ export function renderAbout() {
 <h1 style="font-size:clamp(30px,5vw,52px)">運営者情報・<span class="grad">プライバシーポリシー</span></h1></section>
 <div class="wrap layout"><main><article class="prose">${html}</article></main>
 <aside class="toc"><b>CONTENTS</b>${toc.map((t, i) => `<a href="#s${i + 1}">${t}</a>`).join("")}</aside></div>`,
+  });
+}
+
+// Instagram・Threads のプロフィールに置くリンク集
+export function renderLinks() {
+  const s = getSettings();
+  const items = linkItems();
+  return layout({
+    title: `リンク集｜${s.blogTitle}`,
+    description: "合同会社 U-Speak Lab のリンク集。英語教室向けの U-Speak Roblox、AI・自動化の開発相談、LINE、note、ブログ。",
+    canonical: `${base()}/links`,
+    body: `<section class="wrap" style="max-width:560px;padding-top:56px;padding-bottom:40px;text-align:center">
+<span class="eyebrow"><b></b>U-SPEAK LAB</span>
+<h1 style="font-size:clamp(28px,6vw,40px);line-height:1.4;margin:20px 0 8px;font-weight:900">英語と AI の、<span class="grad">その先へ。</span></h1>
+<p class="meta" style="justify-content:center;margin-bottom:32px">UCLA 在学生が運営する、合同会社 U-Speak Lab</p>
+<div style="display:flex;flex-direction:column;gap:14px;text-align:left">
+${items.map((i) => `<a class="card" href="${esc(i.url)}" target="_blank" rel="noopener" style="padding:18px 22px;${i.primary ? "border-color:transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,var(--g) border-box" : ""}">
+<b style="display:block;font-size:17px">${esc(i.title)}</b><small class="meta">${esc(i.sub)}</small></a>`).join("\n")}
+<a class="card" href="${esc(base())}/blog" style="padding:18px 22px"><b style="display:block;font-size:17px">ブログ</b><small class="meta">海外大学・子どもの英語・AI 活用の記事</small></a>
+</div></section>`,
   });
 }
 
