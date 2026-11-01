@@ -15,12 +15,15 @@ const require = createRequire(import.meta.url);
 const LOG = path.join(DATA_DIR, "instagram-log.json");
 export const IG_DIR = path.join(DATA_DIR, "ig");
 const API = process.env.INSTAGRAM_API_BASE || "https://graph.instagram.com";
+// Facebook ログイン（統合ログイン）で作ったトークン（EAA…）は、graph.facebook.com で使う
+const FB_API = process.env.FACEBOOK_API_BASE || "https://graph.facebook.com";
+const rootOf = (s) => (s?.api === "facebook" ? FB_API : API);
 
 export const getInstagramLog = () => readJson(LOG, []);
 export const hasInstagramToken = () => !!loadSecret("instagram");
 
-async function call(method, pathname, params) {
-  const url = new URL(`${API}${pathname}`);
+async function call(method, pathname, params, root = API) {
+  const url = new URL(`${root}${pathname}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = await fetch(url, { method });
   const json = await res.json().catch(() => ({}));
@@ -32,13 +35,27 @@ async function call(method, pathname, params) {
 export async function setInstagramToken(token) {
   token = String(token || "").trim();
   if (!token) throw new Error("アクセストークンを入れてください");
-  const me = await call("GET", "/me", { fields: "user_id,username", access_token: token });
-  saveSecret("instagram", { token, userId: me.user_id || me.id, username: me.username, refreshedAt: new Date().toISOString() });
-  return { username: me.username };
+  // まず Instagram ログインのトークンとして試し、だめなら Facebook ログイン（統合ログイン）のトークンとして試す
+  try {
+    const me = await call("GET", "/me", { fields: "user_id,username", access_token: token });
+    saveSecret("instagram", { token, api: "instagram", userId: me.user_id || me.id, username: me.username, refreshedAt: new Date().toISOString() });
+    return { username: me.username };
+  } catch (first) {
+    const { data = [] } = await call("GET", "/me/accounts", { fields: "instagram_business_account{id,username}", access_token: token }, FB_API)
+      .catch(() => { throw first; });
+    const ig = data.map((p) => p.instagram_business_account).find(Boolean);
+    if (!ig) throw new Error("このトークンでは Instagram のアカウントが見つかりません。Instagram を Facebook ページにつないでいるか確認してください");
+    saveSecret("instagram", { token, api: "facebook", userId: ig.id, username: ig.username, refreshedAt: new Date().toISOString() });
+    return { username: ig.username };
+  }
 }
 
 export async function instagramWhoAmI() {
   const s = await session();
+  if (s.api === "facebook") {
+    const me = await call("GET", `/${s.userId}`, { fields: "username", access_token: s.token }, FB_API);
+    return { username: me.username };
+  }
   const me = await call("GET", "/me", { fields: "user_id,username", access_token: s.token });
   return { username: me.username };
 }
@@ -46,7 +63,8 @@ export async function instagramWhoAmI() {
 async function session(now = new Date()) {
   const s = loadSecret("instagram");
   if (!s) throw new Error("Instagram のアクセストークンが未設定です。管理画面の「SNS・LINE・ブログ」で入れてください");
-  if (now - Date.parse(s.refreshedAt || 0) > 7 * 864e5) {
+  // Instagram ログインのトークンだけ、ここで延長できる（Facebook ログインのトークンは期限が長いのでそのまま使う）
+  if (s.api !== "facebook" && now - Date.parse(s.refreshedAt || 0) > 7 * 864e5) {
     try {
       const r = await call("GET", "/refresh_access_token", { grant_type: "ig_refresh_token", access_token: s.token });
       Object.assign(s, { token: r.access_token, refreshedAt: now.toISOString() });
@@ -217,9 +235,9 @@ function cleanupSlides(now = Date.now()) {
 // ---- 投稿 ----
 
 // コンテナ（下書き）の準備ができるまで待つ
-async function waitReady(id, token) {
+async function waitReady(id, token, root = API) {
   for (let i = 0; i < 20; i++) {
-    const { status_code: status } = await call("GET", `/${id}`, { fields: "status_code", access_token: token });
+    const { status_code: status } = await call("GET", `/${id}`, { fields: "status_code", access_token: token }, root);
     if (status === "FINISHED") return;
     if (status === "ERROR" || status === "EXPIRED") throw new Error(`Instagram が画像を受け付けませんでした（${status}）`);
     await new Promise((r) => setTimeout(r, 3000));
@@ -238,15 +256,15 @@ export async function postArticleToInstagram(article) {
   });
   const children = [];
   for (const f of files) {
-    const { id: child } = await call("POST", `/${s.userId}/media`, { image_url: `${base}/ig/${id}/${f}`, is_carousel_item: "true", access_token: s.token });
+    const { id: child } = await call("POST", `/${s.userId}/media`, { image_url: `${base}/ig/${id}/${f}`, is_carousel_item: "true", access_token: s.token }, rootOf(s));
     children.push(child);
   }
-  for (const child of children) await waitReady(child, s.token);
+  for (const child of children) await waitReady(child, s.token, rootOf(s));
   const { id: container } = await call("POST", `/${s.userId}/media`, {
     media_type: "CAROUSEL", children: children.join(","), caption: carousel.caption, access_token: s.token,
-  });
-  await waitReady(container, s.token);
-  const { id: mediaId } = await call("POST", `/${s.userId}/media_publish`, { creation_id: container, access_token: s.token });
+  }, rootOf(s));
+  await waitReady(container, s.token, rootOf(s));
+  const { id: mediaId } = await call("POST", `/${s.userId}/media_publish`, { creation_id: container, access_token: s.token }, rootOf(s));
   const log = getInstagramLog();
   log.push({ name: article.name, id: mediaId, cover: carousel.cover, caption: carousel.caption, slides: id, at: new Date().toISOString() });
   writeJson(LOG, log.slice(-500));
