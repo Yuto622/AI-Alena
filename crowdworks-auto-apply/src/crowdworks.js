@@ -30,6 +30,8 @@ export async function launch(browserConfig, { headless } = {}) {
 export async function saveSession(context) {
   fs.mkdirSync(path.dirname(STORAGE_STATE_PATH), { recursive: true });
   await context.storageState({ path: STORAGE_STATE_PATH });
+  // ログイン Cookie を含むため本人以外が読めないようにする
+  fs.chmodSync(STORAGE_STATE_PATH, 0o600);
 }
 
 export async function screenshot(page, name) {
@@ -272,7 +274,8 @@ export async function submitProposal(page, job, evaluation, selectors, { dryRun,
     const leftForm = !/\/proposals\/(new|confirm)/.test(new URL(page.url()).pathname);
     if (successRe.test(text) || (submit && leftForm)) {
       shots.push(await screenshot(page, `submitted-${job.id}`));
-      return { ok: true, message: "応募完了", screenshots: shots };
+      const threadUrl = /\/proposals\/\d+/.test(new URL(page.url()).pathname) ? page.url() : null;
+      return { ok: true, message: "応募完了", screenshots: shots, threadUrl };
     }
     // バリデーションエラーが出ていれば中断
     const err = text.match(/(入力してください|正しくありません|エラーが発生)[^\n]*/);

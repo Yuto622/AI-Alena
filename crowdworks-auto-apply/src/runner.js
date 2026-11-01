@@ -14,6 +14,8 @@ import {
 import { clampAmount, ruleFilter } from "./filter.js";
 import { notify } from "./notify.js";
 import { log as defaultLog, randomDelay } from "./util.js";
+import { checkOutgoing } from "./guards.js";
+import { CircuitBreaker, HaltedError, assertCanAct, audit, isStopped, stopReason } from "./safety.js";
 
 const DRAFT_DIR = path.join(DATA_DIR, "drafts");
 
@@ -36,6 +38,10 @@ export async function runOnce(config, { store, evaluator, dryRun = config.dryRun
   const cw = { launch, ensureLoggedIn, searchJobs, getJobDetail, submitProposal, saveSession, randomDelay, ...deps };
   const summary = { found: 0, filtered: 0, rejected: 0, drafted: 0, applied: 0, failed: 0, dryRun };
   const { limits, mode } = config;
+
+  store.reload();
+  if (isStopped()) { log(`停止中のため巡回をスキップ: ${stopReason()}`); return { ...summary, aborted: "stopped" }; }
+  const breaker = deps.breaker ?? new CircuitBreaker(config.safety.circuitBreakerThreshold);
 
   const remainingToday = () => limits.maxApplicationsPerDay - store.appliedToday();
   if (mode === "auto" && !dryRun && remainingToday() <= 0) {
@@ -105,7 +111,15 @@ export async function runOnce(config, { store, evaluator, dryRun = config.dryRun
       }
 
       const amountYen = clampAmount(ev.amountYen, job);
-      const base = { title: job.title, url: job.url, score: ev.score, reason: ev.reason, evaluation: ev, amountYen };
+      // 提案文も送信前にコードで安全チェック（連絡先・無償の約束などを含むものは送らない）
+      const pc = checkOutgoing(ev.proposal, { allowPatterns: config.safety.allowPatterns, maxChars: config.ai.maxProposalChars * 1.2 });
+      if (!pc.ok) {
+        summary.rejected++;
+        store.upsert(job.id, { status: "blocked", title: job.title, url: job.url, score: ev.score, reason: `提案文が安全チェック不合格: ${pc.violations.join(", ")}`, evaluation: ev });
+        log(`⛔ ${job.title} — 提案文が安全チェック不合格: ${pc.violations.join(", ")}`);
+        continue;
+      }
+      const base = { title: job.title, url: job.url, contractType: job.contractType, score: ev.score, reason: ev.reason, evaluation: ev, amountYen };
 
       if (mode === "draft") {
         const file = writeDraft(job, ev, amountYen);
@@ -116,7 +130,9 @@ export async function runOnce(config, { store, evaluator, dryRun = config.dryRun
         continue;
       }
 
+      if (!dryRun) assertCanAct();
       const result = await cw.submitProposal(page, job, ev, config.selectors, { dryRun, amountYen });
+      if (!dryRun) audit("proposal.submit", { jobId: job.id, title: job.title, amountYen, score: ev.score, ok: result.ok, message: result.message, text: ev.proposal });
       if (result.ok && result.dryRun) {
         store.upsert(job.id, { ...base, status: "dryrun", screenshots: result.screenshots });
         log(`◎ [dry-run] score ${ev.score} ${amountYen}円 ${job.title}`);
@@ -125,7 +141,9 @@ export async function runOnce(config, { store, evaluator, dryRun = config.dryRun
       if (result.ok) {
         appliedThisRun++;
         summary.applied++;
-        store.recordApplication(job.id, { ...base, screenshots: result.screenshots });
+        breaker.success();
+        store.recordApplication(job.id, { ...base, screenshots: result.screenshots, threadUrl: result.threadUrl });
+        if (result.threadUrl) store.upsertThread(result.threadUrl, { jobId: job.id });
         log(`✔ 応募完了 (score ${ev.score}, ${amountYen}円) ${job.title}`);
         await notify(`✔ CrowdWorks 自動応募 (score ${ev.score}, ${amountYen}円)\n${job.title}\n${job.url}`);
         await cw.saveSession(context);
@@ -134,10 +152,14 @@ export async function runOnce(config, { store, evaluator, dryRun = config.dryRun
         summary.failed++;
         store.upsert(job.id, { ...base, status: "failed", error: result.message, screenshots: result.screenshots });
         log(`! 応募失敗 ${job.title}: ${result.message}`);
+        if (!/既に応募済み|募集終了/.test(result.message)) await breaker.failure(result.message);
       }
     }
   } catch (e) {
-    if (e instanceof LoginRequiredError || e instanceof CaptchaError) {
+    if (e instanceof HaltedError) {
+      log(`停止: ${e.message}`);
+      summary.aborted = e.message;
+    } else if (e instanceof LoginRequiredError || e instanceof CaptchaError) {
       log(`中断: ${e.message}`);
       await notify(`⚠ CrowdWorks 自動応募を中断: ${e.message}`);
       summary.aborted = e.message;
@@ -163,7 +185,9 @@ export async function applyDraft(config, jobId, { store, dryRun = false, log = d
   try {
     await ensureLoggedIn(page, config.selectors);
     const job = await getJobDetail(page, { id: jobId, url: rec.url, title: rec.title });
+    if (!dryRun) assertCanAct();
     const result = await submitProposal(page, job, rec.evaluation, config.selectors, { dryRun, amountYen: rec.amountYen });
+    if (!dryRun) audit("proposal.submit", { jobId, title: rec.title, amountYen: rec.amountYen, ok: result.ok, message: result.message, approved: true });
     if (result.ok && !result.dryRun) {
       store.recordApplication(jobId, { screenshots: result.screenshots });
       await saveSession(context);

@@ -1,12 +1,21 @@
 {
   "mode": "auto",
-  "dryRun": true,
-
+  "dryRun": false,
   "profile": {
     "name": "山田 太郎",
     "headline": "Webエンジニア / Python・TypeScript・業務自動化",
     "summary": "Web系エンジニアとして5年。React/Next.js、Node.js、Python（スクレイピング・データ処理・自動化）を中心に、要件整理から実装・保守まで一人で対応できます。平日日中も連絡可能、レスポンスは原則24時間以内です。",
-    "skills": ["TypeScript", "React", "Next.js", "Node.js", "Python", "スクレイピング", "GAS", "業務自動化", "AWS"],
+    "skills": [
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Node.js",
+      "Python",
+      "スクレイピング",
+      "GAS",
+      "業務自動化",
+      "AWS"
+    ],
     "portfolio": [
       "社内向け在庫管理SaaSのフロント/バック開発（Next.js + Supabase）",
       "ECサイト価格監視ボット（Python + Playwright）"
@@ -15,25 +24,40 @@
     "hourlyRateYen": 3000,
     "signature": "ご検討のほど、よろしくお願いいたします。"
   },
-
   "search": {
-    "keywords": ["Python 自動化", "スクレイピング", "Next.js", "GAS"],
+    "keywords": [
+      "Python 自動化",
+      "スクレイピング",
+      "Next.js",
+      "GAS"
+    ],
     "searchUrls": [],
     "pagesPerQuery": 1
   },
-
   "filters": {
-    "contractTypes": ["fixed_price", "hourly"],
+    "contractTypes": [
+      "fixed_price",
+      "hourly"
+    ],
     "minBudgetYen": 30000,
     "minHourlyYen": 2000,
     "maxApplicants": 20,
     "includeKeywords": [],
-    "excludeKeywords": ["アダルト", "出会い", "MLM", "ネットワークビジネス", "情報商材", "LINE登録", "初期費用", "テスト報酬なし", "要課金"],
+    "excludeKeywords": [
+      "アダルト",
+      "出会い",
+      "MLM",
+      "ネットワークビジネス",
+      "情報商材",
+      "LINE登録",
+      "初期費用",
+      "テスト報酬なし",
+      "要課金"
+    ],
     "skipIfNoBudget": false,
     "minClientRating": 0,
     "requireIdentityVerifiedClient": false
   },
-
   "ai": {
     "model": "claude-opus-5-5",
     "effort": "medium",
@@ -41,24 +65,30 @@
     "maxProposalChars": 1200,
     "extraInstructions": ""
   },
-
   "limits": {
-    "maxApplicationsPerRun": 5,
-    "maxApplicationsPerDay": 15,
-    "delayBetweenApplicationsSec": [90, 240],
-    "delayBetweenPagesSec": [3, 8]
+    "maxApplicationsPerRun": 3,
+    "maxApplicationsPerDay": 10,
+    "delayBetweenApplicationsSec": [
+      90,
+      240
+    ],
+    "delayBetweenPagesSec": [
+      3,
+      8
+    ]
   },
-
   "schedule": {
     "intervalMinutes": 60,
-    "activeHours": [8, 23]
+    "inboxIntervalMinutes": 10,
+    "activeHours": [
+      9,
+      21
+    ]
   },
-
   "browser": {
     "headless": true,
     "slowMoMs": 50
   },
-
   "selectors": {
     "loginEmail": "input[name='username'], input[type='email'], #username",
     "loginPassword": "input[name='password'], input[type='password']",
@@ -69,6 +99,43 @@
     "proposalAgreeCheckbox": "input[type='checkbox'][name*='agree'], input[type='checkbox'][name*='terms']",
     "proposalConfirmButton": "button:has-text('確認'), input[type='submit'][value*='確認']",
     "proposalSubmitButton": "button:has-text('応募する'), input[type='submit'][value*='応募']",
-    "proposalSuccessText": "応募が完了|応募しました|応募済み"
+    "proposalSuccessText": "応募が完了|応募しました|応募済み",
+    "threadContainer": "main, #main, [role='main'], body",
+    "threadMessageInput": "textarea",
+    "threadSendButton": "button:has-text('送信'), input[type='submit'][value*='送信']",
+    "contractAcceptButton": "button:has-text('契約する'), button:has-text('同意して契約'), button:has-text('契約に同意'), input[type='submit'][value*='契約']",
+    "contractAgreeCheckbox": "input[type='checkbox'][name*='agree'], input[type='checkbox'][name*='terms']",
+    "contractOfferText": "契約(内容|条件)|契約の(申し込み|申込)|発注(内容|予定)",
+    "contractDoneText": "契約が(成立|完了)|契約しました|作業を開始"
+  },
+  "inbox": {
+    "enabled": true,
+    "listUrls": [
+      "https://crowdworks.jp/proposals",
+      "https://crowdworks.jp/messages"
+    ],
+    "threadLinkPatterns": [
+      "/proposals/\\d+",
+      "/contracts/\\d+",
+      "/messages/\\d+"
+    ],
+    "maxThreadsPerPass": 30,
+    "handleUnknownThreads": false
+  },
+  "negotiation": {
+    "autoAcceptContract": true,
+    "minAcceptRatio": 0.9,
+    "minContractYen": 10000,
+    "maxContractYen": 200000,
+    "maxRepliesPerThreadPerDay": 3,
+    "maxAutoMessagesPerThread": 6,
+    "maxRepliesPerDay": 20,
+    "minMinutesBetweenReplies": 10,
+    "maxMessageChars": 1000,
+    "extraInstructions": ""
+  },
+  "safety": {
+    "circuitBreakerThreshold": 3,
+    "allowPatterns": []
   }
 }

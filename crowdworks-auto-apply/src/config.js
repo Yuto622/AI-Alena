@@ -53,5 +53,12 @@ export function validateConfig(c) {
   if (!(lo >= 30 && hi >= lo)) errors.push("limits.delayBetweenApplicationsSec は [最小>=30, 最大>=最小] にしてください");
   if (!(c.limits?.maxApplicationsPerDay > 0 && c.limits.maxApplicationsPerDay <= 50))
     errors.push("limits.maxApplicationsPerDay は 1〜50 の範囲にしてください");
+  const n = c.negotiation ?? {};
+  if (n.autoAcceptContract && !(n.maxContractYen > 0)) errors.push("negotiation.autoAcceptContract を使うには maxContractYen（自動承諾の上限額）が必須です");
+  if (!(n.minAcceptRatio > 0 && n.minAcceptRatio <= 1)) errors.push("negotiation.minAcceptRatio は 0〜1");
+  if (!(n.maxRepliesPerDay > 0 && n.maxRepliesPerDay <= 100)) errors.push("negotiation.maxRepliesPerDay は 1〜100");
+  if (!(n.minMinutesBetweenReplies >= 1)) errors.push("negotiation.minMinutesBetweenReplies は 1 以上");
+  if (!(c.safety?.circuitBreakerThreshold >= 1)) errors.push("safety.circuitBreakerThreshold は 1 以上");
+  if (!(c.schedule?.inboxIntervalMinutes >= 5)) errors.push("schedule.inboxIntervalMinutes は 5 以上");
   if (errors.length) throw new Error("設定エラー:\n - " + errors.join("\n - "));
 }

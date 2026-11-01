@@ -9,14 +9,20 @@ import { DATA_DIR } from "./config.js";
 export class Store {
   constructor(file = path.join(DATA_DIR, "state.json")) {
     this.file = file;
-    this.state = { jobs: {}, daily: {} };
-    if (fs.existsSync(file)) {
+    this.reload();
+  }
+
+  /** 別プロセス（resume コマンド等）の変更を取り込む。各巡回の最初に呼ぶ */
+  reload() {
+    this.state = { jobs: {}, daily: {}, threads: {}, replies: {} };
+    if (fs.existsSync(this.file)) {
       try {
-        this.state = { jobs: {}, daily: {}, ...JSON.parse(fs.readFileSync(file, "utf8")) };
+        this.state = { ...this.state, ...JSON.parse(fs.readFileSync(this.file, "utf8")) };
       } catch {
-        fs.copyFileSync(file, `${file}.broken-${Date.now()}`);
+        fs.copyFileSync(this.file, `${this.file}.broken-${Date.now()}`);
       }
     }
+    return this;
   }
 
   save() {
@@ -62,9 +68,39 @@ export class Store {
     return this.upsert(id, { ...patch, status: "applied", appliedAt: now.toISOString() });
   }
 
+  // ---- メッセージスレッド ----
+  thread(url) {
+    return this.state.threads[url];
+  }
+
+  upsertThread(url, patch) {
+    this.state.threads[url] = { ...(this.state.threads[url] ?? { url, status: "active", sent: [], firstSeenAt: new Date().toISOString() }), ...patch, updatedAt: new Date().toISOString() };
+    this.save();
+    return this.state.threads[url];
+  }
+
+  recordReply(url, text, now = new Date()) {
+    const day = Store.today(now);
+    this.state.replies[day] = (this.state.replies[day] ?? 0) + 1;
+    const t = this.thread(url) ?? this.upsertThread(url, {});
+    t.sent = [...(t.sent ?? []), { at: now.toISOString(), day, text }];
+    return this.upsertThread(url, { sent: t.sent, lastRepliedAt: now.toISOString() });
+  }
+
+  repliesToday(now = new Date()) {
+    return this.state.replies[Store.today(now)] ?? 0;
+  }
+
+  threadRepliesToday(url, now = new Date()) {
+    const day = Store.today(now);
+    return (this.thread(url)?.sent ?? []).filter((s) => s.day === day).length;
+  }
+
   stats() {
     const counts = {};
     for (const j of Object.values(this.state.jobs)) counts[j.status] = (counts[j.status] ?? 0) + 1;
-    return { total: Object.keys(this.state.jobs).length, byStatus: counts, appliedToday: this.appliedToday(), daily: this.state.daily };
+    const threads = {};
+    for (const t of Object.values(this.state.threads)) threads[t.status] = (threads[t.status] ?? 0) + 1;
+    return { total: Object.keys(this.state.jobs).length, byStatus: counts, appliedToday: this.appliedToday(), daily: this.state.daily, threads, repliesToday: this.repliesToday() };
   }
 }

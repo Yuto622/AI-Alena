@@ -101,6 +101,7 @@ test("dry-run → 本番の通し実行（モックCrowdWorks）", async () => {
 test("日次上限に達していたら何もしない", async () => {
   const store = new Store(path.join(process.env.CW_DATA_DIR, "limit.json"));
   store.state.daily[Store.today()] = config.limits.maxApplicationsPerDay;
+  store.save();
   let launched = false;
   const s = await runOnce(config, { store, evaluator, dryRun: false, log: () => {}, deps: { launch: async () => { launched = true; } } });
   assert.equal(launched, false);
