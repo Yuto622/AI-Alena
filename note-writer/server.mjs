@@ -21,6 +21,7 @@ import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbo
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { hasRakuten, setRakutenKeys } from "./lib/books.mjs";
 import * as tiktok from "./lib/tiktok.mjs";
+import { hasWebhook, setWebhook, notify, weeklyText, sendWeekly } from "./lib/notify.mjs";
 import { buildShort } from "./lib/youtube.mjs";
 import { YT_DIR, hasYoutubeClient, hasYoutubeToken, setYoutubeClient, authUrl, finishAuth, youtubeWhoAmI, getYoutubeLog, previewShort, postArticleToYoutube } from "./lib/youtube.mjs";
 import { createRequire } from "module";
@@ -248,6 +249,13 @@ app.post("/api/tiktok/post", wrap(async (req) => {
   const built = await buildShort(article);
   return tiktok.sendDraft(built.video.file, { name: article.name, caption: built.caption });
 }));
+app.get("/api/webhook", wrap(() => ({ has: hasWebhook(), weekly: weeklyText() })));
+app.put("/api/webhook", wrap(async (req) => {
+  setWebhook(req.body.url);
+  await notify("✅ note 自動化からの通知のテストです。止まったときと、毎週月曜の朝の成果レポートがここに届きます。");
+  return { ok: true };
+}));
+app.post("/api/webhook/weekly", wrap(() => sendWeekly()));
 app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
 app.post("/api/line/check", wrap(() => lineWhoAmI()));
 app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));

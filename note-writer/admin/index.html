@@ -336,6 +336,19 @@
   </section>
 
   <section id="settings">
+    <div class="card"><h3>止まったときの通知と、毎週の成果レポート（無料）</h3>
+      <p id="whStatus"></p>
+      <p><small>公開や SNS への投稿で失敗したら、何が止まったか・どう直すかをすぐ送ります（同じ失敗は1日1回まで）。毎週月曜の朝には、先週の公開本数・どの送り先が何回押されたか・今月の売上を送ります。</small></p>
+      <details><summary>Webhook URL の取り方（3分）</summary><ul>
+        <li><b>Slack</b>：<a href="https://api.slack.com/apps" target="_blank">Slack API</a> →「Create New App」→「From scratch」→「Incoming Webhooks」をオン →「Add New Webhook to Workspace」でチャンネルを選ぶ → URL をコピー</li>
+        <li><b>Discord</b>：サーバーの設定 →「連携サービス」→「ウェブフック」→「新しいウェブフック」→ URL をコピー</li>
+        <li><b>Google Chat</b>：スペースの「アプリと統合」→「Webhook を追加」→ URL をコピー</li>
+      </ul></details>
+      <div class="row"><label><small>Webhook URL</small><input id="whUrl" type="password" autocomplete="new-password" placeholder="https://hooks.slack.com/services/…"></label></div>
+      <div class="actions"><button class="btn primary" onclick="saveWebhook()">保存してテスト送信</button>
+        <button class="btn" onclick="act('/api/webhook/weekly', {}, '成果レポートを今すぐ送る')">成果レポートを今すぐ送る</button></div>
+      <pre id="whWeekly" style="white-space:pre-wrap;font-size:13px"></pre>
+    </div>
     <div class="card"><h3>全記事の最後に付ける案内（アプリの紹介など）</h3>
       <p><small>ここに書いた文章が、すべての記事の最後に自動で付きます（有料記事では有料部分の最後）。空にして保存すると付かなくなります。Markdown で書けます。</small></p>
       <textarea id="ctaText" style="min-height:180px"></textarea>
@@ -737,7 +750,12 @@ async function saveAccount() {
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }
 }
 
+async function saveWebhook() {
+  try { await api("/api/webhook", "PUT", { url:$("whUrl").value }); $("whUrl").value = ""; toast("保存しました。テストの通知が届いたか確認してください", 8000); loadSettings(); }
+  catch (e) { toast(`保存できません：${e.message}`, 8000); }
+}
 async function loadSettings() {
+  api("/api/webhook").then((w) => { $("whStatus").innerHTML = w.has ? "<b>通知先を設定済み</b>" : "<b>まだ通知先が設定されていません。</b>"; $("whWeekly").textContent = `いま送るとこうなります：\n\n${w.weekly}`; }).catch(() => {});
   loadAccounts();
   loadCta();
   const s = await api("/api/settings");

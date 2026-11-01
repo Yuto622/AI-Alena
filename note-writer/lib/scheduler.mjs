@@ -12,6 +12,7 @@ import { shouldSendDigest, sendDigest } from "./line.mjs";
 import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
 import { youtubeEnabled, postArticleToYoutube, buildShort } from "./youtube.mjs";
 import { tiktokEnabled, sendDraft } from "./tiktok.mjs";
+import { notifyErrors, shouldSendWeekly, sendWeekly } from "./notify.mjs";
 import { nextArticleForBlog, writeBlogPost, nextPostForBooks, addBooksToPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -187,7 +188,9 @@ export async function tick(now = new Date()) {
   if (due) {
     try {
       const r = await publishArticle(due.name);
-      report.published = { name: due.name, url: r.url };
+      // 公開はできたが、SNS などへの投稿で失敗したもの（通知に回す）
+      const sideErrors = Object.fromEntries(Object.entries(r).filter(([k, v]) => k.endsWith("Error") && v));
+      report.published = { name: due.name, url: r.url, ...(Object.keys(sideErrors).length ? { sideErrors } : {}) };
     } catch (e) {
       if (e.code === "TOO_SOON") {
         // 前の公開から間がないだけ。次の実行でもう一度試す
@@ -287,6 +290,13 @@ export async function tick(now = new Date()) {
     report.learnings = await updateLearnings(now);
   } catch (e) {
     report.errors.push(`学びの更新失敗: ${e.message}`);
+  }
+  // 毎週月曜の朝に成果レポート、失敗があればその場で通知
+  try {
+    if (shouldSendWeekly(now)) report.weekly = await sendWeekly(now);
+    await notifyErrors(report, now);
+  } catch (e) {
+    console.error(`通知の送信に失敗：${e.message}`);
   }
   return report;
 }
