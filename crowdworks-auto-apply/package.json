@@ -1,0 +1,23 @@
+{
+  "name": "crowdworks-auto-apply",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CrowdWorks の案件検索 → AI 審査 → 提案文生成 → 自動応募を行うボット",
+  "type": "module",
+  "bin": { "cw-apply": "src/cli.js" },
+  "scripts": {
+    "login": "node src/cli.js login",
+    "run": "node src/cli.js run",
+    "dry-run": "node src/cli.js run --dry-run",
+    "loop": "node src/cli.js loop",
+    "stats": "node src/cli.js stats",
+    "apply": "node src/cli.js apply",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "playwright": "1.63.0",
+    "zod": "^3.25.0"
+  }
+}
