@@ -11,6 +11,7 @@ const OUTGOING_BLOCK = [
   [/LINE\s*(ID|id|@)|line\.me|@[a-z0-9_]{4,}/i, "LINE などの外部ID"],
   [/chatwork|slack|discord|skype|telegram|whatsapp|zoom\.us/i, "外部ツールのアカウント"],
   [/振込先|口座番号|銀行口座/, "口座情報"],
+  [/【要確認】|要確認/, "未記入のプロフィール項目（【要確認】）"],
 ];
 
 /** 本人の同意なしに約束してはいけない表現 */

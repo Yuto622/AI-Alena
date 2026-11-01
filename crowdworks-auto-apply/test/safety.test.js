@@ -24,6 +24,7 @@ test("checkOutgoing: 外部連絡先・約束・値下げをブロック", () =>
     "修正は無料で対応します",
     "Zoomで打ち合わせしましょう",
     "本日中に納品します",
+    "稼働は【要確認】です",
   ]) assert.equal(checkOutgoing(bad).ok, false, bad);
 
   // 金額の 0 は無償扱いしない

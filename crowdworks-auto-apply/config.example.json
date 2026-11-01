@@ -2,34 +2,44 @@
   "mode": "auto",
   "dryRun": false,
   "profile": {
-    "name": "山田 太郎",
-    "headline": "Webエンジニア / Python・TypeScript・業務自動化",
-    "summary": "Web系エンジニアとして5年。React/Next.js、Node.js、Python（スクレイピング・データ処理・自動化）を中心に、要件整理から実装・保守まで一人で対応できます。平日日中も連絡可能、レスポンスは原則24時間以内です。",
+    "name": "合同会社U-Speak Lab",
+    "headline": "英語教育×生成AI×Roblox｜教材制作・業務自動化の開発チーム",
+    "summary": "英語教育と生成AI・ゲーム技術を掛け合わせたサービスを企画・開発・運用する法人です。自社プロダクト「U-Speak Roblox」（Roblox上で英会話・英単語を学べる教育用ワールド。英会話教室向け）を企画から開発・運用まで自社で手がけ、その中で教材PDFの読み取り→AI画像生成→ゲームへの反映を自動化する仕組みを構築してきました。生成AIで手作業を減らし、品質をそろえて量産するノウハウを活かし、業務自動化・教材制作・Roblox開発・資料作成をお受けしています。法人として契約・請求に対応します。",
     "skills": [
-      "TypeScript",
-      "React",
-      "Next.js",
-      "Node.js",
-      "Python",
-      "スクレイピング",
-      "GAS",
+      "生成AI（Claude / Gemini API）",
       "業務自動化",
-      "AWS"
+      "Python",
+      "JavaScript / TypeScript / Node.js",
+      "Playwright（ブラウザ自動化）",
+      "スクレイピング",
+      "Google Apps Script / スプレッドシート連携",
+      "CSV・Excelデータ整形",
+      "Roblox / Luau",
+      "英語教材作成",
+      "AI画像生成による教材イラスト制作",
+      "LaTeX（PDF資料）",
+      "PowerPoint 提案書・マニュアル作成"
     ],
     "portfolio": [
-      "社内向け在庫管理SaaSのフロント/バック開発（Next.js + Supabase）",
-      "ECサイト価格監視ボット（Python + Playwright）"
+      "英語学習サービス「U-Speak Roblox」の企画・開発・運用（英会話教室へ導入）",
+      "教材PDF → AI画像生成 → Robloxへの反映を自動化する教材制作パイプラインの構築",
+      "英検語彙データの4択クイズ化（CSV）と単語イラスト一覧PDFの自動生成",
+      "営業リストの精査・郵便番号補完・重複除外など営業事務の自動化ツール開発"
     ],
-    "availability": "週20〜30時間",
+    "availability": "【要確認】例: 平日・土日とも対応、ご連絡は原則24時間以内",
     "hourlyRateYen": 3000,
-    "signature": "ご検討のほど、よろしくお願いいたします。"
+    "signature": "合同会社U-Speak Lab"
   },
   "search": {
     "keywords": [
-      "Python 自動化",
+      "生成AI 自動化",
+      "ChatGPT API",
+      "GAS 自動化",
       "スクレイピング",
-      "Next.js",
-      "GAS"
+      "Python 自動化",
+      "Roblox",
+      "英語 教材",
+      "教材作成"
     ],
     "searchUrls": [],
     "pagesPerQuery": 1
