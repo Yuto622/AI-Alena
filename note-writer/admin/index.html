@@ -615,8 +615,8 @@ async function loadSocial() {
   $("cAmazon").value = st.amazonTag || "";
   const base = d.blog.base;
   $("blStatus").innerHTML = base ? `ブログ：<a href="${esc(base)}/blog" target="_blank">${esc(base)}/blog</a>　／ Search Console に登録するサイトマップ：<code>${esc(base)}/sitemap.xml</code>` : "";
-  $("blList").innerHTML = "<tr><th>日付</th><th>記事</th><th>PR</th><th></th></tr>" + d.blog.posts.map((p) =>
-    `<tr><td>${jst(p.at)}</td><td><a href="${esc(base)}/blog/${esc(p.slug)}" target="_blank">${esc(p.title)}</a></td><td>${p.affiliates.length || "-"}</td>
+  $("blList").innerHTML = "<tr><th>日付</th><th>記事</th><th>紹介した本</th><th></th></tr>" + d.blog.posts.map((p) =>
+    `<tr><td>${jst(p.at)}</td><td><a href="${esc(base)}/blog/${esc(p.slug)}" target="_blank">${esc(p.title)}</a></td><td><small>${esc([...(p.books || []).map((b) => b.name), ...p.affiliates.map((a) => a.name)].join(" / ")) || (p.booksCheckedAt ? "合う本なし" : "これから選ぶ")}</small></td>
      <td><button class="btn" onclick="removeBlog('${esc(p.slug)}')">消して書き直す</button></td></tr>`).join("");
 }
 function parseLines(id, re, make) {
