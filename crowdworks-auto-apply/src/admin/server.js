@@ -151,9 +151,8 @@ export function createAdminServer({ store, scheduler, password, configPath, chec
       const flash = url.searchParams.get("msg");
 
       if (req.method === "POST") {
-        // Origin が付いていれば同一ホストであること（SameSite に加えた二重の CSRF 対策）
-        const origin = req.headers.origin;
-        if (origin && new URL(origin).host !== req.headers.host) return send(403, "forbidden");
+        // CSRF 対策: SameSite=Strict の Cookie + セッションごとのトークン。
+        // （Cloud Shell のプレビュー等、Host を書き換えるプロキシ経由でも使えるよう Origin の厳密比較はしない）
         const body = await readBody(req);
         if (!auth.checkCsrf(session, body.csrf)) return send(403, "CSRF トークンが不正です。ページを再読み込みしてください。");
         if (url.pathname === "/logout") {

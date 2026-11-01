@@ -78,7 +78,9 @@ test("CSRF トークンなしの操作は拒否", async () => {
   const r = await post(cookie, "/actions/stop", { reason: "x" });
   assert.equal(r.status, 403);
   assert.equal(isStopped(), false);
-  const r2 = await fetch(`${base}/actions/stop`, { method: "POST", headers: { cookie, origin: "https://evil.example", "content-type": "application/x-www-form-urlencoded" }, body: form({ csrf: await csrfFrom(cookie) }), redirect: "manual" });
+  // 別セッションのトークンは使えない
+  const other = await login();
+  const r2 = await post(cookie, "/actions/stop", { csrf: await csrfFrom(other.cookie) });
   assert.equal(r2.status, 403);
 });
 
