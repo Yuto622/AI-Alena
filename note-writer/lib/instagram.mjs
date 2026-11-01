@@ -37,35 +37,49 @@ export async function setInstagramToken(token, igUserId = "") {
   token = String(token || "").trim();
   igUserId = String(igUserId || "").trim();
   if (!token) throw new Error("アクセストークンを入れてください");
-  // まず Instagram ログインのトークンとして試し、だめなら Facebook ログイン（統合ログイン）のトークンとして試す
-  try {
-    const me = await call("GET", "/me", { fields: "user_id,username", access_token: token });
-    saveSecret("instagram", { token, api: "instagram", userId: me.user_id || me.id, username: me.username, refreshedAt: new Date().toISOString() });
-    return { username: me.username };
-  } catch (first) {
-    if (/^\d{10,}$/.test(igUserId)) {
-      // どちらで失敗したかがわかるように、両方のエラーを出す
-      const me = await call("GET", `/${igUserId}`, { fields: "username", access_token: token }, FB_API)
-        .catch((e) => { throw new Error(`Instagram ログインとして：${first.message}／Facebook ログインとして：${e.message.replace("Instagram API", "Facebook API")}`); });
-      saveSecret("instagram", { token, api: "facebook", userId: igUserId, username: me.username, refreshedAt: new Date().toISOString() });
-      return { username: me.username };
+  const id = /^\d{10,}$/.test(igUserId) ? igUserId : "";
+  // Meta の画面によって、作られるトークンの種類（Instagram ログイン／Facebook ログイン）と問い合わせ先が違うので、順に試す
+  const attempts = [
+    ["Instagram ログイン（/me）", async () => {
+      const me = await call("GET", "/me", { fields: "user_id,username", access_token: token });
+      return { api: "instagram", userId: me.user_id || me.id, username: me.username };
+    }],
+    ...(id ? [["Instagram ログイン（ID 指定）", async () => {
+      const me = await call("GET", `/${id}`, { fields: "username", access_token: token });
+      return { api: "instagram", userId: id, username: me.username };
+    }], ["Facebook ログイン（ID 指定）", async () => {
+      const me = await call("GET", `/${id}`, { fields: "username", access_token: token }, FB_API);
+      return { api: "facebook", userId: id, username: me.username };
+    }]] : []),
+    ["Facebook ログイン（ページ経由）", async () => {
+      const { data = [] } = await call("GET", "/me/accounts", { fields: "instagram_business_account{id,username}", access_token: token }, FB_API);
+      const ig = data.map((p) => p.instagram_business_account).find(Boolean);
+      if (!ig) throw new Error("つながっている Instagram が見つかりません");
+      return { api: "facebook", userId: ig.id, username: ig.username };
+    }],
+  ];
+  const errors = [];
+  for (const [label, run] of attempts) {
+    try {
+      const r = await run();
+      saveSecret("instagram", { token, ...r, refreshedAt: new Date().toISOString() });
+      return { username: r.username, via: label };
+    } catch (e) {
+      errors.push(`${label}：${e.message.replace(/^Instagram API /, "").slice(0, 160)}`);
     }
-    const { data = [] } = await call("GET", "/me/accounts", { fields: "instagram_business_account{id,username}", access_token: token }, FB_API)
-      .catch(() => { throw first; });
-    const ig = data.map((p) => p.instagram_business_account).find(Boolean);
-    if (!ig) throw new Error("このトークンでは Instagram のアカウントが自動で見つかりません。「Instagram アカウント ID」の欄に、トークンを作った画面に出ていた数字（17841…）を入れて、もう一度保存してください");
-    saveSecret("instagram", { token, api: "facebook", userId: ig.id, username: ig.username, refreshedAt: new Date().toISOString() });
-    return { username: ig.username };
   }
+  // どのアカウントのトークンかを添えて、全部の理由を返す
+  const who = await call("GET", "/me", { fields: "id,name", access_token: token }, FB_API).then((m) => `トークンの持ち主：${m.name || m.id}`, () => "");
+  throw new Error(`どの方法でも Instagram アカウントを読めませんでした。${who}\n${errors.join("\n")}`);
 }
 
 export async function instagramWhoAmI() {
   const s = await session();
-  if (s.api === "facebook") {
-    const me = await call("GET", `/${s.userId}`, { fields: "username", access_token: s.token }, FB_API);
-    return { username: me.username };
-  }
-  const me = await call("GET", "/me", { fields: "user_id,username", access_token: s.token });
+  // Instagram ログインのトークンは /me、それ以外はアカウント ID で聞く
+  const me = s.api === "facebook"
+    ? await call("GET", `/${s.userId}`, { fields: "username", access_token: s.token }, FB_API)
+    : await call("GET", "/me", { fields: "username", access_token: s.token })
+      .catch(() => call("GET", `/${s.userId}`, { fields: "username", access_token: s.token }));
   return { username: me.username };
 }
 
