@@ -27,20 +27,52 @@ function deepMerge(base, override) {
   return out;
 }
 
+/**
+ * 設定ファイルの場所: --config > CW_CONFIG > data/config.json（管理画面で編集） > ./config.json
+ */
+export function configPathFor(configPath) {
+  if (configPath) return configPath;
+  if (process.env.CW_CONFIG) return process.env.CW_CONFIG;
+  const inData = path.join(DATA_DIR, "config.json");
+  if (fs.existsSync(inData)) return inData;
+  return path.join(ROOT, "config.json");
+}
+
+/** 管理画面から保存する先（書き込み可能な場所） */
+export function writableConfigPath(configPath) {
+  return configPath || process.env.CW_CONFIG || path.join(DATA_DIR, "config.json");
+}
+
+let warned = false;
 export function loadConfig(configPath) {
   loadDotEnv();
   const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, "config.example.json"), "utf8"));
-  const file = configPath || process.env.CW_CONFIG || path.join(ROOT, "config.json");
+  const file = configPathFor(configPath);
   let user = {};
   if (fs.existsSync(file)) {
     user = JSON.parse(fs.readFileSync(file, "utf8"));
-  } else {
+  } else if (!warned) {
+    warned = true;
     console.warn(`[config] ${file} が見つかりません。config.example.json の既定値で動作します。`);
   }
   const config = deepMerge(defaults, user);
   validateConfig(config);
   fs.mkdirSync(DATA_DIR, { recursive: true });
   return config;
+}
+
+/** 検証してから原子的に保存（不正な設定は保存しない） */
+export function saveConfig(config, configPath) {
+  // 省略されたキーは既定値で補って検証する（実行時の読み込みと同じ）
+  const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, "config.example.json"), "utf8"));
+  validateConfig(deepMerge(defaults, config));
+  const file = writableConfigPath(configPath);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + "\n");
+  fs.renameSync(tmp, file);
+  return file;
 }
 
 export function validateConfig(c) {

@@ -18,7 +18,8 @@
     "inbox": "node src/cli.js inbox",
     "resume": "node src/cli.js resume",
     "stop": "node src/cli.js stop",
-    "unhalt": "node src/cli.js unhalt"
+    "unhalt": "node src/cli.js unhalt",
+    "serve": "node src/cli.js serve"
   },
   "engines": {
     "node": ">=20"

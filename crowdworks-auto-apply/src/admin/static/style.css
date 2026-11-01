@@ -1,0 +1,30 @@
+:root{--g:#1B3A2F;--g2:#24503F;--o:#E27A2D;--bg:#F6F4EE;--card:#fff;--text:#1d2420;--muted:#6b7570;--line:#e3e0d6;--bad:#c0392b;--ok:#2e7d4f;--info:#2f6690}
+@media (prefers-color-scheme:dark){:root{--bg:#121714;--card:#1b221e;--text:#e8ece9;--muted:#9aa59f;--line:#2c3530}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.6}
+header{background:var(--g);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between}
+.brand{font-weight:700;display:flex;align-items:center;gap:8px}.brand small{opacity:.7;font-weight:400}
+.mark{background:var(--o);border-radius:8px;width:28px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:800}
+nav{display:flex;flex-wrap:wrap;gap:4px;align-items:center}nav a{color:#dfe8e2;text-decoration:none;padding:6px 10px;border-radius:8px}nav a.on,nav a:hover{background:var(--g2);color:#fff}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px}.narrow{max-width:420px;margin:40px auto}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:16px 0 10px}
+.banner{border-radius:14px;padding:14px 18px;margin:0 0 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.banner.ok{background:#e4f1e9;color:#174a2c}.banner.bad{background:#fbe5e2;color:#7d1d12}.banner.info{background:#e3eef6;color:#1b4466}
+@media (prefers-color-scheme:dark){.banner.ok{background:#173323;color:#cfe9d8}.banner.bad{background:#3a1a16;color:#f6cdc6}.banner.info{background:#16293a;color:#cfe2f2}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px}.tl{color:var(--muted);font-size:13px}.tv{font-size:28px;font-weight:800}.ts{color:var(--muted);font-size:12px}
+.tile.win .tv{color:var(--o)}.tile.bad .tv{color:var(--bad)}
+table{width:100%;border-collapse:collapse;display:block;overflow-x:auto}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:13px;color:var(--muted);white-space:nowrap}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);padding:10px;border-radius:8px;margin:6px 0;font-size:13px}pre.log{max-height:70vh;overflow:auto}
+.badge{display:inline-block;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.badge.ok{background:#dcefe3;color:#1d5a35}.badge.win{background:#fde6d4;color:#9a4a10}.badge.info{background:#dde9f3;color:#21507a}.badge.bad{background:#f8d9d4;color:#8c2216}.badge.warn{background:#fbedc9;color:#7a5a06}.badge.muted{background:#e9e7e1;color:#5d655f}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:8px 14px;cursor:pointer}
+button.primary{background:var(--g);color:#fff;border-color:var(--g)}button.danger{background:var(--bad);color:#fff;border-color:var(--bad)}button.link{background:none;border:0;color:#dfe8e2;padding:6px 10px}
+form.inline{display:inline-flex;gap:6px;margin:2px}.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.stop input{width:180px}
+input,select,textarea{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)}
+label{display:block;margin:8px 0;font-size:14px}label.check{display:flex;gap:8px;align-items:center}label.check input{width:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 16px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.flash{background:#fff7e6;border:1px solid #f1d39b;color:#6b4a00;border-radius:10px;padding:10px 14px;margin:0 0 16px}
+.err{color:var(--bad)}.muted,.sub{color:var(--muted)}.sub{font-size:12px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.filters a{text-decoration:none;color:var(--text);padding:2px 4px;border-radius:8px}.filters a.on{outline:2px solid var(--o)}
+a{color:var(--info)}

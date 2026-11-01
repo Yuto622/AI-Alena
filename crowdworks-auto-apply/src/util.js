@@ -26,4 +26,14 @@ export function addDaysYmd(days, sep = "-", now = new Date()) {
   return [d.getUTCFullYear(), String(d.getUTCMonth() + 1).padStart(2, "0"), String(d.getUTCDate()).padStart(2, "0")].join(sep);
 }
 
-export const log = (...args) => console.log(`[${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}]`, ...args);
+/** 管理画面で見られるよう、直近のログをメモリに保持する */
+export const recentLogs = [];
+const MAX_LOGS = 1000;
+
+export const log = (...args) => {
+  const ts = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+  const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+  recentLogs.push(`[${ts}] ${line}`);
+  if (recentLogs.length > MAX_LOGS) recentLogs.splice(0, recentLogs.length - MAX_LOGS);
+  console.log(`[${ts}]`, ...args);
+};

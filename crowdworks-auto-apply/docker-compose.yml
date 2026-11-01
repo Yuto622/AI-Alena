@@ -1,0 +1,35 @@
+# 使い方:
+#   docker compose up -d --build                 # 管理画面は 127.0.0.1:8080（SSH トンネルで見る）
+#   DOMAIN=bot.example.com docker compose --profile https up -d --build   # HTTPS で公開（Caddy が証明書を自動取得）
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - CW_DATA_DIR=/app/data
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      - COOKIE_SECURE=${COOKIE_SECURE:-0}
+    volumes:
+      - botdata:/app/data
+    ports:
+      - "127.0.0.1:8080:8080"   # 外部には直接公開しない
+    shm_size: "1gb"            # Chromium の安定動作用
+
+  caddy:
+    profiles: ["https"]
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on: [bot]
+    environment:
+      - DOMAIN=${DOMAIN:-}
+    command: caddy reverse-proxy --from ${DOMAIN} --to bot:8080
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddydata:/data
+
+volumes:
+  botdata:
+  caddydata:

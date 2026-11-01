@@ -57,6 +57,7 @@ npm run dry-run              # 応募巡回を 1 回（入力まで・送信し�
 npm run inbox -- --dry-run   # メッセージ対応を 1 回（判断と返信案をログに出すだけ）
 npm run loop                 # 全自動で常駐（応募 + メッセージ対応 + 契約承諾）
 npm run stats                # 応募数・スレッド状態など
+npm run serve                # 常駐 + 管理画面（ADMIN_PASSWORD 必須、http://127.0.0.1:8080）
 
 npm run stop -- "理由"       # 緊急停止
 npm run unhalt               # 再開
@@ -93,15 +94,44 @@ npm run apply -- 12345678          # 確認した下書きを応募
 | `safety` | 自動停止までの連続失敗回数、送信チェックで許可する文字列（自分のポートフォリオ URL 等の正規表現） |
 | `selectors` | 各画面の CSS セレクタ。**CrowdWorks の画面変更で動かなくなったらここを修正** |
 
-## 常駐運用（Docker）
+## 管理画面
+
+`npm run serve`（Docker では既定）で、常駐ボットと管理画面が同じプロセスで動きます。スマホからも操作できます。
+
+| 画面 | できること |
+|---|---|
+| ダッシュボード | 稼働状態・本番/テストモード、本日の応募数・返信数、受注数、**要対応スレッド**（理由と返信案）、**緊急停止 / 再開**、今すぐ実行 |
+| メッセージ | スレッドの状態別一覧、ボットが送った文面、要対応 → 自動対応に戻す / 自動対応を止める |
+| 案件 | 審査結果・スコア・提示額・提案文・スクリーンショット |
+| 送信履歴 | 監査ログ（応募・返信・契約・管理操作） |
+| ログ | 直近の動作ログ |
+| 設定 | テストモード、上限、稼働時間、キーワード、契約自動承諾の金額条件、プロフィール。JSON で全項目も編集可（保存時に検証） |
+| ログイン情報 | 手元で `npm run login` して作った `data/storage-state.json` を貼り付けて登録、ログイン確認 |
+
+セキュリティ: パスワード必須（12文字以上・`ADMIN_PASSWORD`）、5回失敗で15分ロック、HttpOnly / SameSite=Strict Cookie、CSRF トークン、CSP、表示する外部データはすべてエスケープ。
+Docker では管理画面を `127.0.0.1` にだけ公開し、SSH トンネルで見るのが既定です。ドメインを使う場合は Caddy が HTTPS を自動設定します。
+
+## デプロイ（Google Cloud VM・1 コマンド）
+
+手元の PC で（gcloud CLI が必要）:
 
 ```bash
-docker build -t cw-apply .
-docker run -d --name cw-apply --restart unless-stopped \
-  -v $(pwd)/config.json:/app/config.json:ro -v $(pwd)/.env:/app/.env:ro -v $(pwd)/data:/app/data \
-  cw-apply
-docker exec cw-apply node src/cli.js stop "手動停止"   # 緊急停止
+cd crowdworks-auto-apply
+cp .env.example .env            # ANTHROPIC_API_KEY・ADMIN_PASSWORD・SLACK_WEBHOOK_URL を記入
+gcloud auth login
+gcloud config set project <PROJECT_ID>
+./deploy/deploy-gce.sh           # VM 作成 → Docker 導入 → アップロード → 起動（2回目以降は更新のみ）
 ```
+
+HTTPS で公開する場合は、ドメインの A レコードを VM の外部 IP に向けてから
+`.env` に `COOKIE_SECURE=1` と `TRUST_PROXY=1` を設定し、`DOMAIN=bot.example.com ./deploy/deploy-gce.sh`。
+
+起動後の初期設定（管理画面で）:
+1. 「ログイン情報」に、手元で `npm run login` して作った `data/storage-state.json` の中身を貼り付け → 「ログインできるか確認」
+2. 「設定」でテストモードをオンにして数回動かし、「案件」「送信履歴」で内容を確認
+3. 問題なければテストモードをオフ
+
+自前のサーバーで動かす場合は `docker compose up -d --build`（HTTPS は `DOMAIN=... docker compose --profile https up -d --build`）。
 
 ## トラブルシューティング
 
@@ -123,6 +153,9 @@ npm test
 
 ```
 src/cli.js           コマンド
+src/scheduler.js     常駐スケジューラ（設定のホットリロード・同時実行防止）
+src/admin/           管理画面（認証・画面・静的ファイル）
+deploy/deploy-gce.sh Google Cloud VM へのデプロイ
 src/runner.js        応募巡回
 src/inbox-runner.js  メッセージ対応・契約承諾
 src/crowdworks.js    ログイン・検索・詳細解析・応募送信（Playwright）

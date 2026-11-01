@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { loadConfig } from "./config.js";
-import { interactiveLogin } from "./crowdworks.js";
+import { ensureLoggedIn, interactiveLogin, launch } from "./crowdworks.js";
+import { Scheduler } from "./scheduler.js";
+import { createAdminServer } from "./admin/server.js";
 import { Evaluator } from "./llm.js";
 import { applyDraft, runOnce } from "./runner.js";
 import { ConversationAgent } from "./conversation.js";
 import { runInbox } from "./inbox-runner.js";
-import { STOP_FILE, acquireLock, halt, isStopped, stopReason, unhalt } from "./safety.js";
+import { STOP_FILE, acquireLock, halt, unhalt } from "./safety.js";
 import { Store } from "./store.js";
-import { inActiveHours, log, sleep } from "./util.js";
+import { log } from "./util.js";
 
 const HELP = `CrowdWorks 自動応募ボット
 
@@ -17,6 +19,7 @@ const HELP = `CrowdWorks 自動応募ボット
   run                   1 回巡回（検索 → 審査 → 応募）
   inbox                 応募後のメッセージに 1 回対応（返信・契約承諾・エスカレーション）
   loop                  常駐: メッセージ対応(inboxIntervalMinutes) と 応募巡回(intervalMinutes)
+  serve                 常駐 + 管理画面（PORT, ADMIN_PASSWORD 必須）
   resume <threadURL>    本人対応が済んだスレッドを自動対応に戻す
   stop [理由]           緊急停止（全送信を止める。loop 中のプロセスにも即時反映）
   unhalt                停止を解除
@@ -96,45 +99,33 @@ async function main() {
       return;
     }
 
-    case "loop": {
+    case "loop":
+    case "serve": {
       const release = acquireLock();
-      const evaluator = new Evaluator(config.ai, config.profile);
-      const agent = new ConversationAgent(config.ai, config.profile, config.negotiation);
-      const { intervalMinutes, inboxIntervalMinutes, activeHours } = config.schedule;
-      log(`常駐開始 (mode=${config.mode}, dryRun=${dryRun}, 応募 ${intervalMinutes}分 / メッセージ ${inboxIntervalMinutes}分間隔, 稼働 ${activeHours.join("〜")}時 JST)`);
-      let stop = false;
-      const onSig = () => { stop = true; log("停止要求を受け付けました"); };
-      process.on("SIGINT", onSig);
-      process.on("SIGTERM", onSig);
-      const jitter = (min) => min * 60_000 * (0.8 + Math.random() * 0.4);
-      let nextApply = 0;
-      let nextInbox = 0;
-      try {
-        while (!stop) {
-          const now = Date.now();
-          if (isStopped()) {
-            log(`停止中: ${stopReason()}（npm run unhalt で再開）`);
-          } else if (!inActiveHours(activeHours)) {
-            // 深夜の送信は不自然なので、稼働時間外はメッセージ対応も応募もしない
-          } else {
-            try {
-              if (config.inbox.enabled && now >= nextInbox) {
-                await runInbox(config, { store, agent, dryRun });
-                nextInbox = Date.now() + jitter(inboxIntervalMinutes);
-              }
-              if (now >= nextApply && !isStopped()) {
-                await runOnce(config, { store, evaluator, dryRun });
-                nextApply = Date.now() + jitter(intervalMinutes);
-              }
-            } catch (e) {
-              log(`エラー: ${e.stack ?? e.message}`);
-              nextInbox = Math.max(nextInbox, Date.now() + 5 * 60_000);
-              nextApply = Math.max(nextApply, Date.now() + 5 * 60_000);
-            }
-          }
-          for (let t = 0; t < 60_000 && !stop; t += 5000) await sleep(5000);
-        }
-      } finally { release(); }
+      const scheduler = new Scheduler({ store, configPath: args.config, dryRunOverride: args.live ? false : args.dryRun ? true : undefined });
+      log(`常駐開始 (mode=${config.mode}, dryRun=${dryRun}, 応募 ${config.schedule.intervalMinutes}分 / メッセージ ${config.schedule.inboxIntervalMinutes}分間隔, 稼働 ${config.schedule.activeHours.join("〜")}時 JST)`);
+      let server = null;
+      if (cmd === "serve") {
+        const port = Number(process.env.PORT ?? 8080);
+        const host = process.env.ADMIN_HOST ?? "127.0.0.1";
+        server = createAdminServer({
+          store, scheduler, configPath: args.config,
+          password: process.env.ADMIN_PASSWORD,
+          trustProxy: process.env.TRUST_PROXY === "1",
+          secureCookie: process.env.COOKIE_SECURE === "1",
+          checkLogin: async () => {
+            const { browser, page } = await launch(loadConfig(args.config).browser);
+            try { await ensureLoggedIn(page, loadConfig(args.config).selectors); return true; }
+            catch { return false; }
+            finally { await browser.close().catch(() => {}); }
+          },
+        });
+        server.listen(port, host, () => log(`管理画面: http://${host}:${port}`));
+      }
+      const shutdown = () => { log("停止要求を受け付けました"); scheduler.stop(); server?.close(); };
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
+      try { await scheduler.loop(); } finally { release(); }
       return;
     }
 
