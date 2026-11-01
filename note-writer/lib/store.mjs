@@ -56,6 +56,8 @@ export const DEFAULT_SETTINGS = {
   instagramOnPublish: true,
   // YouTube ショート：公開したら、要点を1分弱の縦長動画（ナレーション付き）にして投稿する
   youtubeOnPublish: true,
+  // Facebook ページ：公開したら紹介する（U-Speak の記事は説明会の予約へ）
+  facebookOnPublish: true,
   // TikTok：公開したら、YouTube ショートと同じ動画を TikTok の下書きに送る（アプリで「投稿」を押すだけ）
   tiktokOnPublish: true,
   // ナレーションの声（Google Cloud Text-to-Speech の日本語の声の名前）

@@ -21,6 +21,7 @@ import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbo
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { hasRakuten, setRakutenKeys } from "./lib/books.mjs";
 import * as tiktok from "./lib/tiktok.mjs";
+import { hasFacebookPage, setFacebookPage, facebookWhoAmI, getFacebookLog, postArticleToFacebook } from "./lib/facebook.mjs";
 import { hasWebhook, setWebhook, notify, weeklyText, sendWeekly } from "./lib/notify.mjs";
 import { buildShort } from "./lib/youtube.mjs";
 import { YT_DIR, hasYoutubeClient, hasYoutubeToken, setYoutubeClient, authUrl, finishAuth, youtubeWhoAmI, getYoutubeLog, previewShort, postArticleToYoutube } from "./lib/youtube.mjs";
@@ -215,6 +216,7 @@ app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
   instagram: { hasToken: hasInstagramToken(), log: getInstagramLog().slice(-20).reverse() },
+  facebook: { has: hasFacebookPage(), log: getFacebookLog().slice(-20).reverse() },
   tiktok: { hasClient: tiktok.hasTiktokClient(), hasToken: tiktok.hasTiktokToken(), log: tiktok.getTiktokLog().slice(-20).reverse(), redirectUri: `${(process.env.PUBLIC_URL || "").replace(/\/$/, "")}/oauth/tiktok/callback` },
   youtube: { hasClient: hasYoutubeClient(), hasToken: hasYoutubeToken(), log: getYoutubeLog().slice(-20).reverse(), redirectUri: `${(process.env.PUBLIC_URL || "").replace(/\/$/, "")}/oauth/youtube/callback` },
   blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase(), rakuten: hasRakuten() },
@@ -242,6 +244,9 @@ app.put("/api/youtube/client", wrap((req) => setYoutubeClient(req.body)));
 app.post("/api/youtube/check", wrap(() => youtubeWhoAmI()));
 app.post("/api/youtube/preview", wrap((req) => previewShort(igArticle(req.body.name))));
 app.post("/api/youtube/post", wrap((req) => postArticleToYoutube(igArticle(req.body.name))));
+app.put("/api/facebook/page", wrap((req) => setFacebookPage(req.body)));
+app.post("/api/facebook/check", wrap(() => facebookWhoAmI()));
+app.post("/api/facebook/post", wrap((req) => postArticleToFacebook(igArticle(req.body.name))));
 app.put("/api/tiktok/client", wrap((req) => tiktok.setTiktokClient(req.body)));
 app.post("/api/tiktok/check", wrap(() => tiktok.tiktokWhoAmI()));
 app.post("/api/tiktok/post", wrap(async (req) => {

@@ -188,6 +188,29 @@
       <div class="scroll"><table id="thLog"></table></div>
     </div>
 
+    <div class="card"><h3>Facebook ページへの自動投稿（無料）</h3>
+      <p id="fbStatus"></p>
+      <p><small>英語教室の経営者がいちばん使っている SNS です。記事を公開したら紹介を投稿し、U-Speak の記事は「無料説明の予約」へ、AI の記事はここなら（ココナラ）へ直接送ります。</small></p>
+      <details><summary>設定のしかた（初回だけ・15分）</summary><ol>
+        <li>Facebook で会社のページを作る（まだなければ）：<a href="https://www.facebook.com/pages/create" target="_blank">ページを作成</a></li>
+        <li><a href="https://developers.facebook.com/apps/" target="_blank">Meta for Developers</a> の「U-Speak Auto Post」→「ユースケース」→「ユースケースを追加」→「<b>ページのすべてを管理</b>」</li>
+        <li>「アプリの設定」→「ベーシック」の「<b>アプリ ID</b>」と「<b>app secret</b>」（表示を押す）をコピー</li>
+        <li><a href="https://developers.facebook.com/tools/explorer/" target="_blank">グラフ API エクスプローラ</a>で、アプリに「U-Speak Auto Post」を選び、アクセス許可に <code>pages_show_list</code>・<code>pages_manage_posts</code>・<code>pages_read_engagement</code> を追加 →「Generate Access Token」→ ページを選んで許可 → 出てきたトークンをコピー</li>
+        <li>下の3つの欄に貼って「保存」（期限のないページ用のトークンに、自動で切り替えます）</li>
+      </ol></details>
+      <div class="row">
+        <label><small>アプリ ID</small><input id="fbApp" autocomplete="off"></label>
+        <label><small>app secret</small><input id="fbSecret" type="password" autocomplete="new-password"></label>
+        <label><small>ユーザートークン（グラフ API エクスプローラ）</small><input id="fbToken" type="password" autocomplete="new-password"></label>
+        <label><small>ページの名前（複数あるときだけ）</small><input id="fbPage" autocomplete="off"></label>
+      </div>
+      <label><input type="checkbox" id="cFbPub" style="width:auto"> 公開したら Facebook ページで紹介する</label>
+      <div class="actions"><button class="btn primary" onclick="saveFacebook()">保存</button>
+        <button class="btn" onclick="act('/api/facebook/check', {}, 'Facebook の接続確認')">接続確認（投稿はしない）</button>
+        <button class="btn" onclick="confirm('一番新しい公開済みの記事を、今すぐ Facebook ページに投稿します。よいですか？') && act('/api/facebook/post', {}, 'Facebook に投稿')">最新の記事を今すぐ投稿</button></div>
+      <div class="scroll"><table id="fbLog"></table></div>
+    </div>
+
     <div class="card"><h3>Instagram への自動投稿（無料）</h3>
       <p id="igStatus"></p>
       <p><small>記事を公開したら、要点を5枚のスライド画像（表紙・要点3つ・「続きは note で」）にして投稿します。画像はサーバーで描くので費用0円。Instagram の投稿文のリンクは押せないので、「プロフィールのリンクから」と案内します（プロフィールのリンクにブログか note を入れておいてください）。</small></p>
@@ -571,6 +594,9 @@ async function loadSocial() {
   $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
   $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
+  $("cFbPub").checked = st.facebookOnPublish;
+  $("fbStatus").innerHTML = d.facebook.has ? "<b>ページ設定済み</b>" : "<b>まだページが設定されていません。</b>";
+  $("fbLog").innerHTML = d.facebook.log.map((l) => `<tr><td>${jst(l.at)}</td><td><small>${esc(l.text)}</small></td></tr>`).join("");
   $("cTtPub").checked = st.tiktokOnPublish;
   $("ttStatus").innerHTML = d.tiktok.hasToken ? "<b>TikTok と連携済み</b>" : d.tiktok.hasClient ? "<b>Client key は保存済み。「TikTok と連携」を押してください。</b>" : "<b>まだ連携していません。</b>";
   $("ttRedirect").innerHTML = `<small>Redirect URI：<code>${esc(d.tiktok.redirectUri)}</code></small>`;
@@ -634,6 +660,17 @@ async function igPreview() {
     $("igPreview").innerHTML = `<p><small>${esc(r.title)}</small></p><div class="shots">${r.images.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join("")}</div><pre style="white-space:pre-wrap;font-size:13px">${esc(r.caption)}</pre>`;
     toast("見本ができました（投稿はしていません）");
   } catch (e) { toast(`見本を作れません：${e.message}`, 8000); }
+}
+async function saveFacebook() {
+  try {
+    await api("/api/settings", "PUT", { facebookOnPublish:$("cFbPub").checked });
+    if ($("fbToken").value.trim()) {
+      const r = await api("/api/facebook/page", "PUT", { appId:$("fbApp").value, appSecret:$("fbSecret").value, userToken:$("fbToken").value, pageName:$("fbPage").value });
+      ["fbApp","fbSecret","fbToken"].forEach((id) => $(id).value = "");
+      toast(`保存しました（ページ：${r.page}）${r.pages.length > 1 ? `\nほかのページ：${r.pages.join(" / ")}` : ""}`, 10000);
+    } else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 10000); }
 }
 async function saveTiktok() {
   try {

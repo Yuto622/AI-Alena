@@ -70,10 +70,12 @@ export async function xWhoAmI() {
 // destination：リンク先が note の記事でないとき（snsDestination の結果）。投稿文の締めをリンク先に合わせる
 export async function composePost(article, { again = false, platform = "x", destination = null } = {}) {
   const { askJson } = await import("./generator.mjs");
-  const threads = platform === "threads";
-  const limit = threads ? 200 : 90;
-  const { text } = await askJson(`${threads ? "Threads" : "X（旧 Twitter）"}に、note 記事の紹介を1つ書いてください。
-- 日本語で全角${limit}文字以内（URL は別で付けるので書かない）${threads ? "\n- 2〜4行に改行して読みやすく。最後の行で、記事を読むと何が手に入るかを書く" : ""}
+  // Facebook も Threads と同じく長めに書ける（読者は英語教室の経営者・保護者が多い）
+  const facebook = platform === "facebook";
+  const threads = platform === "threads" || facebook;
+  const limit = facebook ? 300 : threads ? 200 : 90;
+  const { text } = await askJson(`${facebook ? "Facebook ページ" : threads ? "Threads" : "X（旧 Twitter）"}に、note 記事の紹介を1つ書いてください。
+- 日本語で全角${limit}文字以内（URL は別で付けるので書かない）${threads ? "\n- 2〜4行に改行して読みやすく。最後の行で、記事を読むと何が手に入るかを書く" : ""}${facebook ? "\n- 読者は英語教室の経営者・先生や保護者が多い。落ち着いた丁寧な文体で" : ""}
 - 1行目で「誰の、どんな悩みが解決するか」をはっきり書く。煽りすぎない
 - 記事にないこと・筆者の経験にないことは書かない
 - ${threads ? "ハッシュタグは最後に1個だけ（Threads はトピックタグを1つしか付けられない）。記事のテーマを表す短い言葉で（例：#英検 #海外大学 #AI活用）" : "ハッシュタグは最後に1〜2個まで"}

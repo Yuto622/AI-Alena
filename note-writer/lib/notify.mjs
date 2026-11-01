@@ -33,7 +33,7 @@ export async function notify(text) {
 // よくある失敗に、直し方を添える
 function hint(error) {
   // SNS の失敗は、SNS ごとの直し方を先に見る（「401」などで別の原因と取り違えないため）
-  if (/^(Threads|Instagram)/.test(error)) return "→ 管理画面の「SNS・LINE・ブログ」で、その SNS のトークンを入れ直して接続確認をしてください";
+  if (/^(Threads|Instagram|Facebook)/.test(error)) return "→ 管理画面の「SNS・LINE・ブログ」で、その SNS のトークンを入れ直して接続確認をしてください";
   if (/^(YouTube|TikTok)/.test(error)) return "→ 管理画面の「SNS・LINE・ブログ」で、もう一度「連携」を押してください";
   if (/^動画づくり/.test(error)) return "→ 音声合成か動画の作成で失敗しました。次の公開でも続くなら「実行ログ」を確認してください";
   if (/ログイン|cookie|login/i.test(error)) return "→ 管理画面の「設定」で、note のログイン状態（cookie）を貼り直してください";
@@ -46,7 +46,7 @@ function hint(error) {
 export async function notifyErrors(report, now = new Date()) {
   if (!hasWebhook()) return;
   const errors = [...(report.errors || [])];
-  const LABELS = { threadsError: "Threads", instagramError: "Instagram", youtubeError: "YouTube", tiktokError: "TikTok", videoError: "動画づくり", xError: "X" };
+  const LABELS = { threadsError: "Threads", instagramError: "Instagram", youtubeError: "YouTube", tiktokError: "TikTok", videoError: "動画づくり", xError: "X", facebookError: "Facebook" };
   for (const [k, v] of Object.entries(report.published?.sideErrors || {})) errors.push(`${LABELS[k] || k} への投稿失敗: ${v}`);
   if (!errors.length) return;
   const state = readJson(STATE, { sent: {} });

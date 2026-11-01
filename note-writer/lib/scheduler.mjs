@@ -13,6 +13,7 @@ import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
 import { youtubeEnabled, postArticleToYoutube, buildShort } from "./youtube.mjs";
 import { tiktokEnabled, sendDraft } from "./tiktok.mjs";
 import { notifyErrors, shouldSendWeekly, sendWeekly } from "./notify.mjs";
+import { facebookEnabled, postArticleToFacebook } from "./facebook.mjs";
 import { nextArticleForBlog, writeBlogPost, nextPostForBooks, addBooksToPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -81,6 +82,14 @@ export async function publishArticle(name, { mode = "publish", force = false } =
         result.threads = await postArticleToThreads({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
       } catch (e) {
         result.threadsError = e.message;
+      }
+    }
+    if (facebookEnabled()) {
+      try {
+        const { meta, body } = readArticleSource(name);
+        result.facebook = await postArticleToFacebook({ ...meta, name, body, url: result.url, tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+      } catch (e) {
+        result.facebookError = e.message;
       }
     }
     if (instagramEnabled()) {
