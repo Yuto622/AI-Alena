@@ -44,7 +44,9 @@ export async function setInstagramToken(token, igUserId = "") {
     return { username: me.username };
   } catch (first) {
     if (/^\d{10,}$/.test(igUserId)) {
-      const me = await call("GET", `/${igUserId}`, { fields: "username", access_token: token }, FB_API);
+      // どちらで失敗したかがわかるように、両方のエラーを出す
+      const me = await call("GET", `/${igUserId}`, { fields: "username", access_token: token }, FB_API)
+        .catch((e) => { throw new Error(`Instagram ログインとして：${first.message}／Facebook ログインとして：${e.message.replace("Instagram API", "Facebook API")}`); });
       saveSecret("instagram", { token, api: "facebook", userId: igUserId, username: me.username, refreshedAt: new Date().toISOString() });
       return { username: me.username };
     }
