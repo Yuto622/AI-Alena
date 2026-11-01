@@ -233,6 +233,28 @@
       <div class="scroll"><table id="ytLog"></table></div>
     </div>
 
+    <div class="card"><h3>TikTok（下書きまで自動）</h3>
+      <p id="ttStatus"></p>
+      <p><small>YouTube ショートと同じ動画を、TikTok アプリの<b>下書き（受信トレイ）</b>に自動で送ります。TikTok アプリに届く通知を開き、下の一覧の投稿文を貼って「投稿」を押すだけです（1日10秒）。TikTok は人の確認なしに自動で公開する使い方を認めていないため、ここまでを自動にしています。</small></p>
+      <details><summary>連携のしかた（初回だけ・20分）</summary><ol>
+        <li><a href="https://developers.tiktok.com/" target="_blank">TikTok for Developers</a> に TikTok アカウントでログイン →「Manage apps」→「Connect an app」</li>
+        <li>アプリの情報：アイコン、カテゴリ「Education」、プライバシーポリシーと利用規約の URL に <code>https://blog.uspeaklab.org/blog/about</code>、Web/Desktop の URL に <code>https://blog.uspeaklab.org</code></li>
+        <li>「Add products」で <b>Login Kit</b> と <b>Content Posting API</b> を追加。Login Kit の Redirect URI に下の URI を入れる</li>
+        <li>「Sandbox」を作り、「Target users」に自分の TikTok アカウントを追加（審査なしで使えます）</li>
+        <li>Sandbox の「Client key」と「Client secret」を下に貼って「保存」→「TikTok と連携」</li>
+      </ol><p id="ttRedirect"></p></details>
+      <div class="row">
+        <label><small>Client key</small><input id="ttKey" autocomplete="off"></label>
+        <label><small>Client secret</small><input id="ttSecret" type="password" autocomplete="new-password"></label>
+      </div>
+      <label><input type="checkbox" id="cTtPub" style="width:auto"> 公開したら TikTok の下書きに送る</label>
+      <div class="actions"><button class="btn primary" onclick="saveTiktok()">保存</button>
+        <button class="btn" onclick="location.href='/oauth/tiktok/start'">TikTok と連携</button>
+        <button class="btn" onclick="act('/api/tiktok/check', {}, 'TikTok の接続確認')">接続確認</button>
+        <button class="btn" onclick="confirm('一番新しい公開済みの記事の動画を作り、TikTok の下書きに送ります。よいですか？') && act('/api/tiktok/post', {}, 'TikTok に送る')">最新の記事を今すぐ送る</button></div>
+      <div class="scroll"><table id="ttLog"></table></div>
+    </div>
+
     <div class="card"><h3>LINE で「今週の記事」を配信（無料プランは月200通）</h3>
       <p id="lnStatus"></p>
       <details><summary>設定のしかた（初回だけ・10分）</summary><ol>
@@ -536,6 +558,10 @@ async function loadSocial() {
   $("cAffiliates").value = (st.affiliates || []).map((a) => [a.name, a.url, a.fit].join(" | ")).join("\n");
   $("thStatus").innerHTML = d.threads.hasToken ? "<b>トークン設定済み</b>" : "<b>まだトークンが設定されていません。</b>";
   $("thLog").innerHTML = d.threads.log.map((l) => `<tr><td>${jst(l.at)}</td><td>${l.again ? "再紹介" : "公開時"}</td><td>${esc(l.text)}</td></tr>`).join("");
+  $("cTtPub").checked = st.tiktokOnPublish;
+  $("ttStatus").innerHTML = d.tiktok.hasToken ? "<b>TikTok と連携済み</b>" : d.tiktok.hasClient ? "<b>Client key は保存済み。「TikTok と連携」を押してください。</b>" : "<b>まだ連携していません。</b>";
+  $("ttRedirect").innerHTML = `<small>Redirect URI：<code>${esc(d.tiktok.redirectUri)}</code></small>`;
+  $("ttLog").innerHTML = d.tiktok.log.map((l, i) => `<tr><td>${jst(l.at)}</td><td><pre style="white-space:pre-wrap;font-size:12px;margin:0" id="ttc${i}">${esc(l.caption)}</pre></td><td><button class="btn" onclick="navigator.clipboard.writeText($('ttc${i}').textContent);toast('投稿文をコピーしました')">コピー</button></td></tr>`).join("");
   $("cYtPub").checked = st.youtubeOnPublish;
   $("ytStatus").innerHTML = d.youtube.hasToken ? "<b>YouTube と連携済み</b>" : d.youtube.hasClient ? "<b>クライアントは保存済み。「YouTube と連携」を押してください。</b>" : "<b>まだ連携していません。</b>";
   $("ytRedirect").innerHTML = `<small>リダイレクト URI：<code>${esc(d.youtube.redirectUri)}</code></small>`;
@@ -595,6 +621,14 @@ async function igPreview() {
     $("igPreview").innerHTML = `<p><small>${esc(r.title)}</small></p><div class="shots">${r.images.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join("")}</div><pre style="white-space:pre-wrap;font-size:13px">${esc(r.caption)}</pre>`;
     toast("見本ができました（投稿はしていません）");
   } catch (e) { toast(`見本を作れません：${e.message}`, 8000); }
+}
+async function saveTiktok() {
+  try {
+    await api("/api/settings", "PUT", { tiktokOnPublish:$("cTtPub").checked });
+    if ($("ttKey").value.trim()) { await api("/api/tiktok/client", "PUT", { clientKey:$("ttKey").value, clientSecret:$("ttSecret").value }); $("ttKey").value = $("ttSecret").value = ""; toast("保存しました。次に「TikTok と連携」を押してください", 8000); }
+    else toast("保存しました");
+    loadSocial();
+  } catch (e) { toast(`保存できません：${e.message}`, 8000); }
 }
 async function saveYoutube() {
   try {

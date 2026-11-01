@@ -56,6 +56,8 @@ export const DEFAULT_SETTINGS = {
   instagramOnPublish: true,
   // YouTube ショート：公開したら、要点を1分弱の縦長動画（ナレーション付き）にして投稿する
   youtubeOnPublish: true,
+  // TikTok：公開したら、YouTube ショートと同じ動画を TikTok の下書きに送る（アプリで「投稿」を押すだけ）
+  tiktokOnPublish: true,
   // ナレーションの声（Google Cloud Text-to-Speech の日本語の声の名前）
   ttsVoice: "ja-JP-Neural2-B",
   // LINE：友だち追加の URL（記事の最後に案内を付ける）と、週1回の「今週の記事」配信（曜日 0=日曜、日本時間の何時以降か）

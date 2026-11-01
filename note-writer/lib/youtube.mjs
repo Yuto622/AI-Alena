@@ -146,7 +146,8 @@ ${free.slice(0, 8000)}`, SCHEMA);
 }
 
 // 投稿：動画を作って YouTube にアップロードする
-export async function postArticleToYoutube(article) {
+// 動画を1本作る（YouTube と TikTok で同じものを使う）
+export async function buildShort(article) {
   const destination = snsDestination(article);
   const short = await composeShort(article);
   const id = Date.now().toString(36);
@@ -169,16 +170,22 @@ export async function postArticleToYoutube(article) {
     "",
     `${tags.map((t) => `#${t}`).join(" ")} #Shorts`,
   ].join("\n").slice(0, 4900);
-  const title = `${short.title.trim().slice(0, 85)} #Shorts`;
-  const videoId = await upload(video.file, {
-    snippet: { title, description, tags, categoryId: "27", defaultLanguage: "ja", defaultAudioLanguage: "ja" },
+  // TikTok の投稿文（リンクは押せないので、プロフィールのリンクへ案内する）
+  const caption = `${short.title.trim()}\n${short.description.trim()}\n詳しくはプロフィールのリンクから。\n${tags.map((t) => `#${t}`).join(" ")}`.slice(0, 2000);
+  return { id, destination, short, video, tags, description, caption, title: `${short.title.trim().slice(0, 85)} #Shorts` };
+}
+
+export async function postArticleToYoutube(article, built = null) {
+  const b = built || (await buildShort(article));
+  const videoId = await upload(b.video.file, {
+    snippet: { title: b.title, description: b.description, tags: b.tags, categoryId: "27", defaultLanguage: "ja", defaultAudioLanguage: "ja" },
     status: { privacyStatus: "public", selfDeclaredMadeForKids: false, containsSyntheticMedia: true },
   });
   const log = getYoutubeLog();
-  log.push({ name: article.name, id: videoId, title, seconds: Math.round(video.seconds), voiced: video.voiced, to: destination.kind, at: new Date().toISOString() });
+  log.push({ name: article.name, id: videoId, title: b.title, seconds: Math.round(b.video.seconds), voiced: b.video.voiced, to: b.destination.kind, at: new Date().toISOString() });
   writeJson(LOG, log.slice(-500));
   cleanup();
-  return { id: videoId, title, url: `https://youtube.com/shorts/${videoId}`, voiced: video.voiced };
+  return { id: videoId, title: b.title, url: `https://youtube.com/shorts/${videoId}`, voiced: b.video.voiced };
 }
 
 // 動画を作るだけ（管理画面の見本用。アップロードしない）

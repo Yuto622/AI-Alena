@@ -20,6 +20,8 @@ import { hasLineToken, setLineToken, lineWhoAmI, getLineLog, sendDigest } from "
 import { blogBase, getBlogPosts, getBlogPost, renderPost, renderIndex, renderAbout, renderLinks, sitemap, robots, nextArticleForBlog, writeBlogPost, whyNoBlogCandidate, nextPostForBooks, addBooksToPost } from "./lib/blog.mjs";
 import { IG_DIR, hasInstagramToken, setInstagramToken, instagramWhoAmI, getInstagramLog, postArticleToInstagram, composeCarousel, renderSlides, instagramHandle } from "./lib/instagram.mjs";
 import { hasRakuten, setRakutenKeys } from "./lib/books.mjs";
+import * as tiktok from "./lib/tiktok.mjs";
+import { buildShort } from "./lib/youtube.mjs";
 import { YT_DIR, hasYoutubeClient, hasYoutubeToken, setYoutubeClient, authUrl, finishAuth, youtubeWhoAmI, getYoutubeLog, previewShort, postArticleToYoutube } from "./lib/youtube.mjs";
 import { createRequire } from "module";
 import {
@@ -114,6 +116,22 @@ app.get("/oauth/youtube/start", (_req, res) => {
     res.status(400).send(e.message);
   }
 });
+app.get("/oauth/tiktok/start", (_req, res) => {
+  try {
+    res.redirect(302, tiktok.authUrl());
+  } catch (e) {
+    res.status(400).send(e.message);
+  }
+});
+app.get("/oauth/tiktok/callback", async (req, res) => {
+  try {
+    if (req.query.error) throw new Error(`TikTok のログインが取り消されました（${req.query.error}）`);
+    const me = await tiktok.finishAuth({ code: String(req.query.code || ""), state: String(req.query.state || "") });
+    res.type("html").send(`<meta charset="utf-8"><p>TikTok「${String(me.name).replace(/[<>&]/g, "")}」と連携しました。このタブを閉じて、管理画面を再読み込みしてください。</p>`);
+  } catch (e) {
+    res.status(400).type("html").send(`<meta charset="utf-8"><p>連携できませんでした：${String(e.message).replace(/[<>&]/g, "")}</p>`);
+  }
+});
 app.get("/oauth/youtube/callback", async (req, res) => {
   try {
     if (req.query.error) throw new Error(`Google のログインが取り消されました（${req.query.error}）`);
@@ -196,6 +214,7 @@ app.get("/api/social", wrap(() => ({
   threads: { hasToken: hasThreadsToken(), log: getThreadsLog().slice(-20).reverse() },
   line: { hasToken: hasLineToken(), log: getLineLog().slice(-10).reverse() },
   instagram: { hasToken: hasInstagramToken(), log: getInstagramLog().slice(-20).reverse() },
+  tiktok: { hasClient: tiktok.hasTiktokClient(), hasToken: tiktok.hasTiktokToken(), log: tiktok.getTiktokLog().slice(-20).reverse(), redirectUri: `${(process.env.PUBLIC_URL || "").replace(/\/$/, "")}/oauth/tiktok/callback` },
   youtube: { hasClient: hasYoutubeClient(), hasToken: hasYoutubeToken(), log: getYoutubeLog().slice(-20).reverse(), redirectUri: `${(process.env.PUBLIC_URL || "").replace(/\/$/, "")}/oauth/youtube/callback` },
   blog: { posts: getBlogPosts().map(({ body, ...p }) => p), base: blogBase(), rakuten: hasRakuten() },
 })));
@@ -222,6 +241,13 @@ app.put("/api/youtube/client", wrap((req) => setYoutubeClient(req.body)));
 app.post("/api/youtube/check", wrap(() => youtubeWhoAmI()));
 app.post("/api/youtube/preview", wrap((req) => previewShort(igArticle(req.body.name))));
 app.post("/api/youtube/post", wrap((req) => postArticleToYoutube(igArticle(req.body.name))));
+app.put("/api/tiktok/client", wrap((req) => tiktok.setTiktokClient(req.body)));
+app.post("/api/tiktok/check", wrap(() => tiktok.tiktokWhoAmI()));
+app.post("/api/tiktok/post", wrap(async (req) => {
+  const article = igArticle(req.body.name);
+  const built = await buildShort(article);
+  return tiktok.sendDraft(built.video.file, { name: article.name, caption: built.caption });
+}));
 app.put("/api/line/token", wrap((req) => setLineToken(req.body.token)));
 app.post("/api/line/check", wrap(() => lineWhoAmI()));
 app.post("/api/line/digest", wrap(() => sendDigest(new Date(), { force: true })));

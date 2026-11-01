@@ -10,7 +10,8 @@ import { hasXKeys, postArticle, pickArticleToPromote, shouldPostDaily } from "./
 import { hasThreadsToken, postArticleToThreads, shouldPostThreadsDaily, getThreadsLog } from "./threads.mjs";
 import { shouldSendDigest, sendDigest } from "./line.mjs";
 import { instagramEnabled, postArticleToInstagram } from "./instagram.mjs";
-import { youtubeEnabled, postArticleToYoutube } from "./youtube.mjs";
+import { youtubeEnabled, postArticleToYoutube, buildShort } from "./youtube.mjs";
+import { tiktokEnabled, sendDraft } from "./tiktok.mjs";
 import { nextArticleForBlog, writeBlogPost, nextPostForBooks, addBooksToPost } from "./blog.mjs";
 import { runNote } from "./publisher.mjs";
 import { generateArticle, reviewArticle, suggestTopics } from "./generator.mjs";
@@ -89,12 +90,28 @@ export async function publishArticle(name, { mode = "publish", force = false } =
         result.instagramError = e.message;
       }
     }
-    if (youtubeEnabled()) {
+    // ショート動画は1回だけ作り、YouTube と TikTok で使う
+    if (youtubeEnabled() || tiktokEnabled()) {
       try {
         const { meta, body } = readArticleSource(name);
-        result.youtube = await postArticleToYoutube({ ...meta, name, body, url: result.url, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] });
+        const article = { ...meta, name, body, url: result.url, price: Number(meta.price || 0), tags: Array.isArray(meta.tags) ? meta.tags : [meta.tags] };
+        const built = await buildShort(article);
+        if (youtubeEnabled()) {
+          try {
+            result.youtube = await postArticleToYoutube(article, built);
+          } catch (e) {
+            result.youtubeError = e.message;
+          }
+        }
+        if (tiktokEnabled()) {
+          try {
+            result.tiktok = await sendDraft(built.video.file, { name, caption: built.caption });
+          } catch (e) {
+            result.tiktokError = e.message;
+          }
+        }
       } catch (e) {
-        result.youtubeError = e.message;
+        result.videoError = e.message;
       }
     }
   }
