@@ -8,7 +8,7 @@ import {
   normalizeThreadText,
   parseContractAmount,
 } from "./guards.js";
-import { notify } from "./notify.js";
+import { contractMessage, flushNotifyQueue, notify, notifyImportant } from "./notify.js";
 import { log as defaultLog, randomDelay } from "./util.js";
 import { CircuitBreaker, HaltedError, assertCanAct, audit, isStopped, stopReason } from "./safety.js";
 
@@ -22,6 +22,9 @@ export async function runInbox(config, { store, agent, dryRun = config.dryRun, l
   const { negotiation, inbox, selectors, limits } = config;
   const summary = { threads: 0, changed: 0, replied: 0, contracted: 0, escalated: 0, waited: 0, dryRun };
   store.reload();
+  // 前回送れなかった受注通知などを再送（停止中でも通知は送る）
+  const flushed = await (deps.flushNotifyQueue ?? flushNotifyQueue)().catch(() => ({ sent: 0 }));
+  if (flushed.sent) log(`未送信だった通知を ${flushed.sent} 件再送しました`);
   if (isStopped()) { log(`停止中のためメッセージ対応をスキップ: ${stopReason()}`); return { ...summary, aborted: "stopped" }; }
   const breaker = deps.breaker ?? new CircuitBreaker(config.safety.circuitBreakerThreshold);
   const outgoingOpts = (floorYen) => ({ allowPatterns: config.safety.allowPatterns, maxChars: negotiation.maxMessageChars, floorYen });
@@ -32,12 +35,38 @@ export async function runInbox(config, { store, agent, dryRun = config.dryRun, l
 
     const unmanaged = [];
     const urls = new Set(await cw.listThreads(page, inbox));
-    for (const t of Object.values(store.state.threads)) if (t.status === "active") urls.add(t.url);
+    for (const t of Object.values(store.state.threads)) if (["active", "needs_human"].includes(t.status)) urls.add(t.url);
     summary.threads = urls.size;
+    const confirmedRe = new RegExp(selectors.contractConfirmedText);
+
+    /** 受注を記録して Slack に通知（自動承諾・手動承諾の両方） */
+    const markContracted = async ({ url, jobId, job, amountYen, source, kickoffSent = false }) => {
+      summary.contracted++;
+      store.upsertThread(url, { jobId, status: "contracted", contractedAt: new Date().toISOString(), contractAmountYen: amountYen, contractSource: source });
+      if (jobId) store.upsert(jobId, { status: "contracted", contractAmountYen: amountYen, contractSource: source });
+      log(`🎉 受注 (${source === "manual" ? "手動承諾" : "自動承諾"}) ${amountYen ?? "?"}円 ${job?.title ?? url}`);
+      const n = await notifyImportant(contractMessage({
+        title: job?.title, jobUrl: job?.url, threadUrl: url, amountYen, proposedYen: job?.amountYen, contractType: job?.contractType, source, kickoffSent,
+      }));
+      audit("notify.contract", { url, jobId, ok: n.ok, error: n.ok ? undefined : n.error });
+    };
 
     for (const url of urls) {
       const rec = store.thread(url);
-      if (rec && ["needs_human", "contracted", "closed", "unmanaged"].includes(rec.status)) continue;
+      if (rec && ["contracted", "closed", "unmanaged"].includes(rec.status)) continue;
+
+      // 本人対応中のスレッドは読むだけ: 本人が契約を承諾していたら受注として通知する（送信はしない）
+      if (rec?.status === "needs_human") {
+        try {
+          const th = await cw.readThread(page, url, selectors);
+          if (confirmedRe.test(th.text) && !th.contractOffer) {
+            await markContracted({ url, jobId: rec.jobId, job: rec.jobId ? store.get(rec.jobId) : null, amountYen: parseContractAmount(th.text), source: "manual" });
+          }
+        } catch (e) {
+          if (e instanceof LoginRequiredError || e instanceof CaptchaError) throw e;
+        }
+        continue;
+      }
 
       let th;
       try {
@@ -62,6 +91,13 @@ export async function runInbox(config, { store, agent, dryRun = config.dryRun, l
         // 手動で応募した過去案件やスカウトには触らない（まとめて 1 通だけ通知）
         store.upsertThread(url, { jobId, lastHash: hash, status: "unmanaged" });
         unmanaged.push(url);
+        continue;
+      }
+
+      // 本人が CrowdWorks 上で直接承諾した契約を検知
+      if (confirmedRe.test(th.text) && !th.contractOffer) {
+        store.upsertThread(url, { jobId, lastHash: hash });
+        await markContracted({ url, jobId, job, amountYen: parseContractAmount(th.text), source: "manual" });
         continue;
       }
 
@@ -120,20 +156,19 @@ export async function runInbox(config, { store, agent, dryRun = config.dryRun, l
         audit("contract.accept.result", { url, jobId, ok: r.ok, message: r.message });
         if (!r.ok) { await escalate(r.message); await breaker.failure(r.message); continue; }
         breaker.success();
-        summary.contracted++;
+        // 契約は成立したので、通知より先に状態を保存（以降の処理で落ちても二重承諾しない）
         store.upsertThread(url, { jobId, status: "contracted", contractedAt: new Date().toISOString(), contractAmountYen: amountYen });
-        if (jobId) store.upsert(jobId, { status: "contracted", contractAmountYen: amountYen });
-        log(`🎉 受注 ${amountYen}円 ${job?.title ?? url}`);
-        await notify(`🎉 CrowdWorks 受注しました（${amountYen}円）\n${job?.title ?? ""}\n${url}`);
         // 着手の挨拶（失敗しても契約自体は成立しているので通知だけ）
+        let kickoffSent = false;
         if (d.message && checkOutgoing(d.message, outgoingOpts(amountYen)).ok) {
           await cw.readThread(page, url, selectors).catch(() => {});
           assertCanAct();
           const s = await cw.sendMessage(page, d.message, selectors).catch((e) => ({ ok: false, message: e.message }));
           audit("message.send", { url, jobId, ok: s.ok, kind: "kickoff", text: d.message });
-          if (s.ok) store.recordReply(url, d.message);
+          if (s.ok) { store.recordReply(url, d.message); kickoffSent = true; }
           else await notify(`⚠ 受注後の挨拶メッセージ送信に失敗: ${s.message}\n${url}`);
         }
+        await markContracted({ url, jobId, job, amountYen, source: "auto", kickoffSent });
         await cw.saveSession(context);
         continue;
       }

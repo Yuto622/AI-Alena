@@ -1,7 +1,8 @@
 /**
  * 応募後のメッセージ対応〜契約承諾を、実ブラウザ＋偽 CrowdWorks で通し検証する。
  */
-import { test } from "node:test";
+import { test, after } from "node:test";
+import http from "node:http";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -22,6 +23,7 @@ const threads = {
   502: { job: 1004, title: "GASで日報集計の自動化", msgs: ["クライアント: ぜひお願いします。契約内容をご確認ください"], contract: 95000 },
   503: { job: 1005, title: "Next.jsでLP制作", msgs: ["クライアント: 詳細はLINEでやり取りしましょう"] },
   504: { job: 1006, title: "スクレイピングツール改修", msgs: ["クライアント: 予算が厳しく、この金額でお願いします。契約内容をご確認ください"], contract: 50000 },
+  506: { job: 1007, title: "LP用バナー画像の作成", msgs: ["クライアント: よろしくお願いします", "システム: 契約が成立しました"] },
   599: { job: 9999, title: "手動で応募した昔の案件", msgs: ["クライアント: お元気ですか"] },
 };
 const accepted = [];
@@ -80,10 +82,26 @@ function seedStore() {
   const store = new Store();
   for (const t of Object.values(threads)) {
     if (t.job === 9999) continue;
+    if (t.job === 1007) {
+      // 本人に回していたスレッドで、本人が CrowdWorks 上で契約を承諾したケース
+      store.upsert(t.job, { status: "applied", title: t.title, url: `https://crowdworks.jp/public/jobs/${t.job}`, amountYen: 60000, contractType: "fixed_price" });
+      store.upsertThread("https://crowdworks.jp/proposals/506", { jobId: "1007", status: "needs_human", escalation: "打ち合わせ希望" });
+      continue;
+    }
     store.upsert(t.job, { status: "applied", title: t.title, url: `https://crowdworks.jp/public/jobs/${t.job}`, amountYen: 100000, contractType: "fixed_price", evaluation: { proposal: "提案文" } });
   }
   return store;
 }
+
+const slack = [];
+const hook = http.createServer((req, res) => {
+  let b = "";
+  req.on("data", (c) => (b += c));
+  req.on("end", () => { slack.push(JSON.parse(b)); res.end("ok"); });
+});
+await new Promise((r) => hook.listen(0, "127.0.0.1", r));
+process.env.SLACK_WEBHOOK_URL = `http://127.0.0.1:${hook.address().port}/hook`;
+after(() => hook.close());
 
 test("返信・契約承諾・エスカレーション・対象外の振り分け", async () => {
   unhalt();
@@ -96,7 +114,7 @@ test("返信・契約承諾・エスカレーション・対象外の振り分�
   assert.match(threads[501].msgs.at(-1), /^山田: ご質問ありがとうございます/);
   // 502: 95,000円（提案10万円の90%以上）→ 自動承諾＋着手メッセージ
   assert.deepEqual(accepted, ["502"]);
-  assert.equal(s.contracted, 1);
+  assert.equal(s.contracted, 2); // 自動承諾 1 件 + 本人承諾の検知 1 件
   assert.match(threads[502].msgs.at(-1), /ご契約ありがとうございます/);
   assert.equal(store.get(1004).status, "contracted");
   // 503: LINE 誘導 → 送信せず本人へ
@@ -108,16 +126,32 @@ test("返信・契約承諾・エスカレーション・対象外の振り分�
   // 599: 応募記録なし（おすすめ案件リンクに釣られない）→ 触らない
   assert.equal(store.thread("https://crowdworks.jp/proposals/599").status, "unmanaged");
   assert.equal(threads[599].msgs.length, 1);
+  // 受注の Slack 通知: 自動承諾（502）と、本人が承諾した契約の検知（506）
+  const contractNotes = slack.filter((p) => /受注しました/.test(p.text));
+  assert.equal(contractNotes.length, 2, JSON.stringify(slack.map((p) => p.text)));
+  const auto = contractNotes.find((p) => p.text.includes("GASで日報集計"));
+  assert.match(auto.text, /95,000円/);
+  assert.match(JSON.stringify(auto.blocks), /自動承諾/);
+  assert.match(JSON.stringify(auto.blocks), /送信済み/);
+  assert.match(JSON.stringify(auto.blocks), /proposals\/502/);
+  const manual = contractNotes.find((p) => p.text.includes("LP用バナー"));
+  assert.match(JSON.stringify(manual.blocks), /手動/);
+  assert.equal(store.get(1007).status, "contracted");
+  assert.equal(store.thread("https://crowdworks.jp/proposals/506").contractSource, "manual");
+  assert.equal(threads[506].msgs.length, 2, "本人対応中のスレッドには送信しない");
+
   // 監査ログに残る
   const auditLog = fs.readFileSync(path.join(process.env.CW_DATA_DIR, "audit.jsonl"), "utf8");
   assert.match(auditLog, /contract\.accept\.result/);
   assert.match(auditLog, /message\.send/);
 
-  // 2 巡目: 変化がないので AI も呼ばず、何も送らない
+  // 2 巡目: 変化がないので AI も呼ばず、何も送らない（受注通知も重複しない）
   const callsBefore = agent.calls;
+  const slackBefore = slack.length;
   const s2 = await runInbox(config, { store, agent, dryRun: false, log: () => {}, deps });
   assert.equal(agent.calls, callsBefore);
   assert.equal(s2.replied + s2.contracted, 0);
+  assert.equal(slack.filter((p, i) => i >= slackBefore && /受注しました/.test(p.text)).length, 0);
 
   // クライアントが再度質問 → クールダウン中なので返信しない
   threads[501].msgs.push("クライアント: 追加で質問です");

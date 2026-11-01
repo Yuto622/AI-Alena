@@ -70,7 +70,7 @@ function summaryText(r) {
   return `${jst(r.at)}${r.manual ? "（手動）" : ""} ${s.aborted ? `中断: ${s.aborted}` : parts.join(" ") || "変化なし"}`;
 }
 
-export function dashboardPage({ status, stats, config, needsHuman, contracted, session, csrf, flash }) {
+export function dashboardPage({ status, stats, config, needsHuman, contracted, session, slack = {}, csrf, flash }) {
   const banner = status.stopped
     ? `<div class="banner bad"><b>停止中</b> — ${h(status.stopReason)}<div>${postButton("/actions/unhalt", "停止を解除して再開", csrf, { cls: "primary", confirm: "自動運用を再開しますか？" })}</div></div>`
     : status.configError
@@ -103,6 +103,9 @@ ${postButton("/actions/run", "今すぐ応募巡回", csrf, { fields: { kind: "a
 <p class="sub">直近: メッセージ対応 ${h(summaryText(status.lastResults.inbox))}<br>直近: 応募巡回 ${h(summaryText(status.lastResults.apply))}</p></section>
 <section class="card"><h2>要対応スレッド</h2>${nh}</section>
 <section class="card"><h2>最近の受注</h2>${contracted.length ? `<ul>${contracted.map((j) => `<li>${cwLink(j.url, j.title)} — ${h((j.contractAmountYen ?? j.amountYen ?? 0).toLocaleString())}円 <span class="sub">${jst(j.updatedAt)}</span></li>`).join("")}</ul>` : '<p class="muted">まだありません。</p>'}</section>
+<section class="card"><h2>Slack 通知</h2>${slack.configured
+  ? `設定済み（受注・要対応・停止を通知）${slack.queued ? ` <span class="badge warn">未送信 ${h(slack.queued)} 件（次回再送）</span>` : ""} ${postButton("/actions/slack-test", "テスト送信", csrf)}`
+  : '<span class="err">未設定です。.env に SLACK_WEBHOOK_URL を設定して再起動してください（受注通知が届きません）。</span>'}</section>
 <section class="card"><h2>CrowdWorks ログイン</h2>${session.exists ? `保存済み（更新 ${jst(session.mtime)}）` : '<span class="err">未登録です。「ログイン情報」から登録してください。</span>'}</section>`,
   });
 }

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DATA_DIR, STORAGE_STATE_PATH, configPathFor, loadConfig, saveConfig, writableConfigPath } from "../config.js";
 import { audit, halt, unhalt } from "../safety.js";
 import { log, recentLogs } from "../util.js";
+import { contractMessage, sendSlack, slackConfigured } from "../notify.js";
 import { Auth, parseCookies } from "./auth.js";
 import * as V from "./views.js";
 
@@ -42,6 +43,12 @@ function readBody(req) {
 function sessionInfo() {
   if (!fs.existsSync(STORAGE_STATE_PATH)) return { exists: false };
   return { exists: true, mtime: fs.statSync(STORAGE_STATE_PATH).mtime.toISOString() };
+}
+
+function slackInfo() {
+  const q = path.join(DATA_DIR, "notify-queue.jsonl");
+  const queued = fs.existsSync(q) ? fs.readFileSync(q, "utf8").split("\n").filter(Boolean).length : 0;
+  return { configured: slackConfigured(), queued };
 }
 
 function readAudit(limit = 300) {
@@ -166,7 +173,7 @@ export function createAdminServer({ store, scheduler, password, configPath, chec
           const withTitle = (t) => ({ ...t, title: t.jobId ? store.get(t.jobId)?.title : null });
           const needsHuman = threads.filter((t) => t.status === "needs_human").map(withTitle);
           const contracted = Object.values(store.state.jobs).filter((j) => j.status === "contracted").sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")).slice(0, 10);
-          return send(200, V.dashboardPage({ status: scheduler.status(), stats: store.stats(), config, needsHuman, contracted, session: sessionInfo(), csrf, flash }));
+          return send(200, V.dashboardPage({ status: scheduler.status(), stats: store.stats(), config, needsHuman, contracted, session: sessionInfo(), slack: slackInfo(), csrf, flash }));
         }
         case "/threads": {
           store.reload();
@@ -199,7 +206,7 @@ export function createAdminServer({ store, scheduler, password, configPath, chec
           return send(200, V.settingsPage({ config, raw, path: writableConfigPath(configPath), csrf, flash }));
         }
         case "/session":
-          return send(200, V.sessionPage({ session: sessionInfo(), csrf, flash }));
+          return send(200, V.sessionPage({ session: sessionInfo(), slack: slackInfo(), csrf, flash }));
         default:
           if (url.pathname.startsWith("/screenshots/")) {
             const name = path.basename(url.pathname);
@@ -230,6 +237,10 @@ export function createAdminServer({ store, scheduler, password, configPath, chec
         if (scheduler.busy) return redirect("/", `「${scheduler.busy}」を実行中です。終わってから再度お試しください。`);
         scheduler.run(kind, { manual: true }).catch(() => {});
         return redirect("/", `${kind === "apply" ? "応募巡回" : "メッセージ確認"}を開始しました。結果はこの画面とログに出ます。`);
+      }
+      case "/actions/slack-test": {
+        const r = await sendSlack(contractMessage({ title: "【テスト】受注通知の表示確認", amountYen: 100000, proposedYen: 100000, source: "auto", kickoffSent: true, jobUrl: "https://crowdworks.jp/" }));
+        return redirect("/", r.ok ? "Slack にテスト通知を送りました。" : `Slack 通知に失敗しました: ${r.error}`);
       }
       case "/threads/resume":
       case "/threads/close": {
