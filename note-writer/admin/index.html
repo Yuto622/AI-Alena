@@ -221,7 +221,8 @@
         <li>テスターの招待が届いたら、Instagram の「設定 → ウェブサイトのアクセス許可（アプリとウェブサイト）→ テスターへの招待」で承認</li>
         <li>もう一度「トークンを生成」を押し、出てきた文字列を下に貼る</li>
       </ol><small>トークンは60日で切れますが、このシステムが7日ごとに自動で延長します。</small></details>
-      <div class="row"><label><small>アクセストークン</small><input id="igToken" type="password" autocomplete="new-password"></label></div>
+      <div class="row"><label><small>アクセストークン</small><input id="igToken" type="password" autocomplete="new-password"></label>
+        <label><small>Instagram アカウント ID（見つからないと言われたときだけ。17841… の数字）</small><input id="igUserId" autocomplete="off"></label></div>
       <label><input type="checkbox" id="cIgPub" style="width:auto"> 公開したら Instagram に投稿する</label>
       <div class="actions"><button class="btn primary" onclick="saveInstagram()">保存</button>
         <button class="btn" onclick="act('/api/instagram/check', {}, 'Instagram の接続確認')">接続確認（投稿はしない）</button>
@@ -648,7 +649,7 @@ async function saveThreads() {
 async function saveInstagram() {
   try {
     await api("/api/settings", "PUT", { instagramOnPublish:$("cIgPub").checked });
-    if ($("igToken").value.trim()) { const r = await api("/api/instagram/token", "PUT", { token:$("igToken").value }); $("igToken").value = ""; toast(`保存しました（@${r.username}）`); }
+    if ($("igToken").value.trim()) { const r = await api("/api/instagram/token", "PUT", { token:$("igToken").value, igUserId:$("igUserId").value }); $("igToken").value = ""; toast(`保存しました（@${r.username}）`); }
     else toast("保存しました");
     loadSocial();
   } catch (e) { toast(`保存できません：${e.message}`, 8000); }

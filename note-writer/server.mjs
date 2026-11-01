@@ -223,7 +223,7 @@ app.get("/api/social", wrap(() => ({
 })));
 app.put("/api/threads/token", wrap((req) => setThreadsToken(req.body.token)));
 app.post("/api/threads/check", wrap(() => threadsWhoAmI()));
-app.put("/api/instagram/token", wrap((req) => setInstagramToken(req.body.token)));
+app.put("/api/instagram/token", wrap((req) => setInstagramToken(req.body.token, req.body.igUserId)));
 app.post("/api/instagram/check", wrap(() => instagramWhoAmI()));
 // 一番新しい公開済みの記事（または指定の記事）で、スライドの見本だけ作る（投稿しない）
 const igArticle = (name) => {

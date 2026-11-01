@@ -32,8 +32,10 @@ async function call(method, pathname, params, root = API) {
 }
 
 // トークンを確かめてから保存する（自分の ID もここで控える）
-export async function setInstagramToken(token) {
+// igUserId：システムユーザーのトークンなどでアカウントが自動で見つからないとき、トークン生成の画面に出る数字の ID を渡す
+export async function setInstagramToken(token, igUserId = "") {
   token = String(token || "").trim();
+  igUserId = String(igUserId || "").trim();
   if (!token) throw new Error("アクセストークンを入れてください");
   // まず Instagram ログインのトークンとして試し、だめなら Facebook ログイン（統合ログイン）のトークンとして試す
   try {
@@ -41,10 +43,15 @@ export async function setInstagramToken(token) {
     saveSecret("instagram", { token, api: "instagram", userId: me.user_id || me.id, username: me.username, refreshedAt: new Date().toISOString() });
     return { username: me.username };
   } catch (first) {
+    if (/^\d{10,}$/.test(igUserId)) {
+      const me = await call("GET", `/${igUserId}`, { fields: "username", access_token: token }, FB_API);
+      saveSecret("instagram", { token, api: "facebook", userId: igUserId, username: me.username, refreshedAt: new Date().toISOString() });
+      return { username: me.username };
+    }
     const { data = [] } = await call("GET", "/me/accounts", { fields: "instagram_business_account{id,username}", access_token: token }, FB_API)
       .catch(() => { throw first; });
     const ig = data.map((p) => p.instagram_business_account).find(Boolean);
-    if (!ig) throw new Error("このトークンでは Instagram のアカウントが見つかりません。Instagram を Facebook ページにつないでいるか確認してください");
+    if (!ig) throw new Error("このトークンでは Instagram のアカウントが自動で見つかりません。「Instagram アカウント ID」の欄に、トークンを作った画面に出ていた数字（17841…）を入れて、もう一度保存してください");
     saveSecret("instagram", { token, api: "facebook", userId: ig.id, username: ig.username, refreshedAt: new Date().toISOString() });
     return { username: ig.username };
   }
