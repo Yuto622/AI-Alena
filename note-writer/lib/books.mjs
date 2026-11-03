@@ -85,9 +85,9 @@ const PICK = {
 export async function pickBooks({ title, tags = [], text }) {
   if (!hasRakuten()) return [];
   const { askJson } = await import("./generator.mjs");
-  const { keywords } = await askJson(`次のブログ記事の読者が、記事を読んだあとに役立つ「本」を楽天ブックスで探します。検索する言葉を0〜3個考えてください。
+  const { keywords } = await askJson(`次のブログ記事の読者が、記事を読んだあとに役立つ「本」を楽天ブックスで探します。検索する言葉を1〜3個考えてください（必ず1個以上）。
 - 具体的な言葉にする（例：「英検5級 単語」「TOEFL 公式問題集」「英文メール 書き方」「ChatGPT 仕事 効率化」）
-- 本が役に立たない記事なら、空の配列にする
+- 記事にぴったりの本が思いつかなくても、同じ読者に役立つ近いテーマの言葉にする（例：「英語 勉強法」「英検 対策」「仕事 効率化」）
 - オンライン英会話・英語学習アプリの宣伝になる本は探さない（運営者の商品と競合するため）
 
 ## 記事
@@ -110,9 +110,23 @@ ${String(text).slice(0, 4000)}`, KEYWORDS);
     }
     await new Promise((r) => setTimeout(r, 1100)); // 楽天 API は1秒に1回まで
   }
+  // 全記事に本を付けるため、見つからなければ記事のタグや広いテーマで探し直す
+  for (const kw of [...[].concat(tags).slice(0, 2), "英語 勉強法", "英検 対策", "AI 仕事 効率化"]) {
+    if (candidates.length) break;
+    try {
+      for (const b of await searchBooks(kw)) {
+        if (seen.has(b.isbn || b.title)) continue;
+        seen.add(b.isbn || b.title);
+        candidates.push(b);
+      }
+    } catch (e) {
+      console.error(`本の検索に失敗（${kw}）：${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 1100));
+  }
   if (!candidates.length) return [];
-  const { picks } = await askJson(`次のブログ記事の最後で紹介する本を、候補の中から 0〜2 冊選んでください。
-- 記事の内容と読者に本当に合うものだけ。合うものがなければ空の配列
+  const { picks } = await askJson(`次のブログ記事の最後で紹介する本を、候補の中から 1〜2 冊選んでください。
+- 必ず1冊は選ぶ。ぴったりのものがなければ、記事のテーマや読者にいちばん近いものを選ぶ
 - 理由（note）は、候補の説明に書かれていることを元に書く。筆者が読んだ・使ったとは書かない。誇張しない
 - 発売日が古すぎるもの・レビューが極端に低いものは避ける
 
@@ -123,7 +137,10 @@ ${String(text).slice(0, 2000)}
 ## 候補（index：書名／著者／出版社／発売日／レビュー平均（件数）／説明）
 ${candidates.map((b, i) => `${i}：${b.title}／${b.author}／${b.publisher}／${b.salesDate}／${b.review}（${b.reviews}件）／${b.caption}`).join("\n")}`, PICK);
   const tag = getSettings().amazonTag;
-  return (picks || []).filter((p) => candidates[p.index]).slice(0, 2).map((p) => {
+  let chosen = (picks || []).filter((p) => candidates[p.index]).slice(0, 2);
+  // AI が1冊も選ばなかったときは、いちばん売れている候補を1冊（理由は候補の説明から）
+  if (!chosen.length) chosen = [{ index: 0, note: `楽天ブックスでよく読まれている本です。${candidates[0].caption.slice(0, 50)}` }];
+  return chosen.map((p) => {
     const b = candidates[p.index];
     return {
       name: b.title, author: b.author, image: b.image, url: b.url, note: p.note.slice(0, 80), source: "rakuten",

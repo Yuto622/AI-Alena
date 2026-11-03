@@ -157,12 +157,16 @@ async function addBooks(post, text) {
   if (!hasRakuten()) return;
   post.books = await pickBooks({ title: post.title, tags: post.tags, text: text || post.body });
   post.booksCheckedAt = new Date().toISOString();
+  // 2：全記事に本を付ける方式で選んだ（前の方式で「合う本なし」になった記事は選び直す）
+  post.booksVersion = 2;
 }
 
 // 本をまだ選んでいないブログ記事（楽天を設定する前に作った記事など）
 export function nextPostForBooks() {
   if (!hasRakuten()) return null;
-  return getBlogPosts().filter((p) => !p.booksCheckedAt).sort((a, b) => a.at.localeCompare(b.at))[0] || null;
+  return getBlogPosts()
+    .filter((p) => !p.booksCheckedAt || (!(p.books || []).length && p.booksVersion !== 2))
+    .sort((a, b) => a.at.localeCompare(b.at))[0] || null;
 }
 
 // 既存のブログ記事に本を付ける（1回に1本）
