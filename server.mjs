@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { db, ensureDemo } from './server/db.mjs';
 import { aiEnabled, speakingFeedback, commanderChat, parentReport } from './server/ai.mjs';
 import { loadMissions } from './server/missions-loader.mjs';
+import { geocode, issPasses, issNow, sunTimes } from './server/sky.mjs';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -77,12 +78,49 @@ app.get('/api/iss', async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// 御校の上空（住所 → 緯度経度 → ISS通過・今の距離・日の出入り）
+// ---------------------------------------------------------------------------
+app.get('/api/geo', async (req, res) => {
+  try {
+    res.json(await geocode(String(req.query.q || '')));
+  } catch (err) {
+    bad(res, err.message || 'geocode failed', 404);
+  }
+});
+
+const skyCache = new Map(); // key: lat,lon (0.01°) → { at, data }
+app.get('/api/sky', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return bad(res, 'lat/lon required');
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const hit = skyCache.get(key);
+  const nowMs = Date.now();
+  if (hit && nowMs - hit.at < 10 * 60 * 1000) {
+    // 「今」の距離だけは毎回新しく
+    return res.json({ ...hit.data, now: await issNow({ lat, lon }) });
+  }
+  try {
+    const [passes, now] = await Promise.all([issPasses({ lat, lon, days: 7 }), issNow({ lat, lon })]);
+    const sun = sunTimes({ lat, lon });
+    const data = { lat, lon, passes: passes.passes, tle: passes.tle, sun, computedAt: new Date().toISOString() };
+    skyCache.set(key, { at: nowMs, data });
+    res.json({ ...data, now });
+  } catch (err) {
+    console.error('sky error', err);
+    bad(res, 'sky computation failed', 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // classrooms（生徒側：コードの存在確認／先生側：作成・取得）
 // ---------------------------------------------------------------------------
+const publicClassroom = (c) => ({ code: c.code, name: c.name, unlockedWeeks: c.unlockedWeeks, plan: c.plan, location: c.location || null });
+
 app.get('/api/classrooms/:code/public', (req, res) => {
   const c = db.getClassroom(req.params.code);
   if (!c) return bad(res, '教室コードが見つかりません', 404);
-  res.json({ code: c.code, name: c.name, unlockedWeeks: c.unlockedWeeks, plan: c.plan });
+  res.json(publicClassroom(c));
 });
 
 app.post('/api/classrooms', (req, res) => {
@@ -109,12 +147,22 @@ app.get('/api/teacher/dashboard', (req, res) => {
   });
 });
 
-app.patch('/api/teacher/classroom', (req, res) => {
+app.patch('/api/teacher/classroom', async (req, res) => {
   const c = requireTeacher(req, res);
   if (!c) return;
   const patch = {};
   if (Number.isInteger(req.body.unlockedWeeks)) patch.unlockedWeeks = Math.min(8, Math.max(1, req.body.unlockedWeeks));
   if (typeof req.body.name === 'string') patch.name = req.body.name.slice(0, 60);
+  if (typeof req.body.address === 'string') {
+    // 住所を入れるだけで、緯度経度を解決して保存 → 以後の全ミッションが「御校の上空」基準になる
+    try {
+      const g = await geocode(req.body.address.slice(0, 120));
+      patch.location = { lat: g.lat, lon: g.lon, label: g.label, address: req.body.address.slice(0, 120), source: g.source };
+    } catch (err) {
+      return bad(res, err.message || 'geocode failed', 404);
+    }
+  }
+  if (req.body.address === null) patch.location = null;
   res.json(db.updateClassroom(c.code, patch));
 });
 
@@ -147,7 +195,7 @@ app.post('/api/students/join', (req, res) => {
   if (!nickname || typeof nickname !== 'string' || nickname.trim().length < 1) return bad(res, 'ニックネームを入力してください');
   const lv = [1, 2, 3].includes(Number(level)) ? Number(level) : 1;
   const s = db.upsertStudent({ classroomCode: code, nickname: nickname.trim().slice(0, 20), level: lv });
-  res.json({ student: s, classroom: { code: c.code, name: c.name, unlockedWeeks: c.unlockedWeeks } });
+  res.json({ student: s, classroom: publicClassroom(c) });
 });
 
 app.get('/api/students/:id/results', (req, res) => {

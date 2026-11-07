@@ -69,6 +69,14 @@ export interface Mission {
 
 export type PlanId = 'standard' | 'plus' | 'premium';
 
+export interface ClassroomLocation {
+  lat: number;
+  lon: number;
+  label: string;
+  address?: string;
+  source?: string;
+}
+
 export interface Classroom {
   code: string; // 4桁教室コード（U-Speak と同じUX）
   pin: string; // 先生用4桁PIN
@@ -76,6 +84,52 @@ export interface Classroom {
   plan: PlanId;
   createdAt: string;
   unlockedWeeks: number; // 解放済み週数（週1ペースで増える）
+  location?: ClassroomLocation | null; // 住所を入れるだけで、全ミッションが「御校の上空」基準になる
+}
+
+export type PublicClassroom = Pick<Classroom, 'code' | 'name' | 'unlockedWeeks' | 'plan' | 'location'>;
+
+export interface IssPass {
+  start: string;
+  end: string;
+  durationMin: number;
+  maxElevation: number;
+  maxAt: string;
+  fromDir: string;
+  maxDir: string;
+  toDir: string;
+  rangeKmAtMax: number;
+  visibleToEye: boolean;
+  visibleFrom: string | null;
+  visibleTo: string | null;
+}
+
+export interface SkyReport {
+  lat: number;
+  lon: number;
+  passes: IssPass[];
+  tle: { source: string; epochLine: string; approximate: boolean };
+  sun: { sunrise: string | null; sunset: string | null; solarNoon: string | null; noonElevation: number; dayLengthMin: number | null };
+  now: {
+    rangeKm: number;
+    azimuth: number;
+    elevation: number;
+    direction: string;
+    aboveHorizon: boolean;
+    subLat: number;
+    subLon: number;
+    altitudeKm: number;
+    lightSeconds: number;
+    approximate: boolean;
+  } | null;
+  computedAt: string;
+}
+
+export interface GeoResult {
+  lat: number;
+  lon: number;
+  label: string;
+  source: string;
 }
 
 export interface Student {

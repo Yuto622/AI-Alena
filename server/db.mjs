@@ -149,6 +149,8 @@ export function ensureDemo() {
     plan: 'plus',
     createdAt: now(),
     unlockedWeeks: 8,
+    // デモ教室の住所（U-Speak Lab 所在地）。住所を入れるだけで上空データが全ミッションに反映される
+    location: { lat: 35.6619, lon: 139.7041, label: '東京都渋谷区神南1-11-4', address: '東京都渋谷区神南1-11-4', source: 'seed' },
   };
   state.classrooms.push(c);
   const demoStudents = [

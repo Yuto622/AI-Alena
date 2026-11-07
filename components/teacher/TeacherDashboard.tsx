@@ -6,6 +6,7 @@ import { navigate } from '../../lib/router';
 import type { AskQuestion, Classroom, MissionResult, Student } from '../../types';
 import { LEVEL_LABEL } from '../../types';
 import { Button, Card, Input, Pill, Spinner, Stat, Textarea } from '../ui';
+import { SkyAboveSchool } from '../labs/SkyAboveSchool';
 
 // ---------------------------------------------------------------------------
 // ログイン
@@ -67,6 +68,9 @@ export const TeacherDashboard: React.FC<{ t: TeacherSession }> = ({ t }) => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [week, setWeek] = useState(1);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [address, setAddress] = useState('');
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrMsg, setAddrMsg] = useState<string | null>(null);
 
   const load = () =>
     api
@@ -146,6 +150,22 @@ export const TeacherDashboard: React.FC<{ t: TeacherSession }> = ({ t }) => {
   const saveWeek = async () => {
     const c = await api.updateClassroom(t, { unlockedWeeks: week });
     setData((d) => (d ? { ...d, classroom: c } : d));
+  };
+
+  const saveAddress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddrBusy(true);
+    setAddrMsg(null);
+    try {
+      const c = await api.updateClassroom(t, { address: address.trim() });
+      setData((d) => (d ? { ...d, classroom: c } : d));
+      setAddrMsg(`保存しました：${c.location?.label}`);
+      setAddress('');
+    } catch (e2) {
+      setAddrMsg((e2 as Error).message);
+    } finally {
+      setAddrBusy(false);
+    }
   };
 
   const TABS: { id: Tab; label: string }[] = [
@@ -365,6 +385,22 @@ export const TeacherDashboard: React.FC<{ t: TeacherSession }> = ({ t }) => {
       )}
 
       {tab === 'settings' && (
+        <div className="space-y-4">
+        <Card title="📍 教室の住所 → 全ミッションが「御校の上空」基準に" subtitle="住所を入れるだけ。ISSの通過予報・今の距離・日の出入り・衛星写真が、生徒のミッション1とこの画面に反映されます。">
+          <form onSubmit={saveAddress} className="flex gap-2">
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={classroom.location?.address || '例：東京都渋谷区神南1-11-4'} />
+            <Button type="submit" disabled={addrBusy || !address.trim()}>
+              {addrBusy ? <Spinner /> : '住所を保存'}
+            </Button>
+          </form>
+          {addrMsg && <p className="text-sm mt-2 text-emerald-300">{addrMsg}</p>}
+          {classroom.location && (
+            <p className="text-xs text-slate-400 mt-2">
+              現在：{classroom.location.label}（{classroom.location.lat.toFixed(4)}, {classroom.location.lon.toFixed(4)}）
+            </p>
+          )}
+        </Card>
+        {classroom.location && <SkyAboveSchool location={classroom.location} allowInput={false} />}
         <Card title="設定" subtitle="週の解放は手動（通常は授業日に1つ進める）">
           <div className="grid md:grid-cols-2 gap-5">
             <div>
@@ -380,6 +416,7 @@ export const TeacherDashboard: React.FC<{ t: TeacherSession }> = ({ t }) => {
             </div>
           </div>
         </Card>
+        </div>
       )}
     </div>
   );

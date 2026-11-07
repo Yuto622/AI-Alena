@@ -1,4 +1,4 @@
-import type { AskQuestion, ChatTurn, Classroom, IssPosition, Lead, MissionResult, Student } from '../types';
+import type { AskQuestion, ChatTurn, Classroom, GeoResult, IssPosition, Lead, MissionResult, PublicClassroom, SkyReport, Student } from '../types';
 
 async function http<T>(url: string, init?: RequestInit & { teacher?: { code: string; pin: string } }): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string>) };
@@ -15,14 +15,16 @@ async function http<T>(url: string, init?: RequestInit & { teacher?: { code: str
 export const api = {
   health: () => http<{ status: string; ai: 'gemini' | 'rules'; missions: number }>('/api/health'),
   iss: () => http<IssPosition>('/api/iss'),
+  geo: (q: string) => http<GeoResult>(`/api/geo?q=${encodeURIComponent(q)}`),
+  sky: (lat: number, lon: number) => http<SkyReport>(`/api/sky?lat=${lat}&lon=${lon}`),
 
   // students
   join: (code: string, nickname: string, level: number) =>
-    http<{ student: Student; classroom: Pick<Classroom, 'code' | 'name' | 'unlockedWeeks'> }>('/api/students/join', {
+    http<{ student: Student; classroom: PublicClassroom }>('/api/students/join', {
       method: 'POST',
       body: JSON.stringify({ code, nickname, level }),
     }),
-  classroomPublic: (code: string) => http<Pick<Classroom, 'code' | 'name' | 'unlockedWeeks' | 'plan'>>(`/api/classrooms/${code}/public`),
+  classroomPublic: (code: string) => http<PublicClassroom>(`/api/classrooms/${code}/public`),
   studentResults: (studentId: string) => http<MissionResult[]>(`/api/students/${studentId}/results`),
   saveResult: (studentId: string, body: Partial<MissionResult>) =>
     http<MissionResult>(`/api/students/${studentId}/results`, { method: 'POST', body: JSON.stringify(body) }),
@@ -46,7 +48,7 @@ export const api = {
   teacherLogin: (code: string, pin: string) => http<Classroom>('/api/teacher/login', { method: 'POST', body: JSON.stringify({ code, pin }) }),
   dashboard: (t: { code: string; pin: string }) =>
     http<{ classroom: Classroom; students: Student[]; results: MissionResult[]; questions: AskQuestion[] }>('/api/teacher/dashboard', { teacher: t }),
-  updateClassroom: (t: { code: string; pin: string }, patch: Partial<Classroom>) =>
+  updateClassroom: (t: { code: string; pin: string }, patch: Partial<Classroom> & { address?: string | null }) =>
     http<Classroom>('/api/teacher/classroom', { method: 'PATCH', body: JSON.stringify(patch), teacher: t }),
   report: (t: { code: string; pin: string }, studentId: string) =>
     http<{ text: string; source: string }>(`/api/teacher/report/${studentId}`, { method: 'POST', body: '{}', teacher: t }),

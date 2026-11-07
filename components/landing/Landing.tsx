@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 import { navigate } from '../../lib/router';
 import type { PlanId } from '../../types';
 import { Button, Card, Input, Pill, Stat, Textarea } from '../ui';
+import { SkyAboveSchool } from '../labs/SkyAboveSchool';
 
 const yen = (n: number) => `¥${Math.round(n).toLocaleString('ja-JP')}`;
 
@@ -12,6 +13,7 @@ export const Landing: React.FC = () => {
   return (
     <div className="space-y-20">
       <Hero />
+      <AddressDemo />
       <WhyNow />
       <Curriculum />
       <HowItWorks />
@@ -50,7 +52,7 @@ const Hero: React.FC = () => (
           </Button>
         </div>
         <div className="mt-8 grid grid-cols-3 gap-3">
-          <Stat label="教室側の準備" value="0 分" hint="台本・教材・採点が自動" />
+          <Stat label="教室側の準備" value="住所だけ" hint="上空データが自動で教材に" />
           <Stat label="本物のデータ" value="4 Labs" hint="ISS / 月 / 系外惑星 / ハッブル" />
           <Stat label="英検対応" value="5〜3級" hint="3レベル自動出し分け" />
         </div>
@@ -68,6 +70,14 @@ const Hero: React.FC = () => (
         <div className="mt-4 text-xs text-slate-400">↑ これが保護者レポートと修了証にそのまま載ります。</div>
       </div>
     </div>
+  </section>
+);
+
+// ---------------------------------------------------------------------------
+const AddressDemo: React.FC = () => (
+  <section id="sky">
+    <SectionTitle kicker="TRY IT NOW" title="御校の住所を入れるだけで、上空の衛星データが教材になる" sub="ISSが御校の真上を通る日時と方角、今この瞬間の距離、日の出入り、NASA/ESAの衛星写真。すべて鍵なしの公開データから自動計算。生徒は「この日の夜、南西の空を見上げる」宿題を持ち帰ります。" />
+    <SkyAboveSchool allowInput />
   </section>
 );
 

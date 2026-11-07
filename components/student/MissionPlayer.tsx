@@ -164,7 +164,7 @@ export const MissionPlayer: React.FC<{ mission: Mission; s: StudentSession }> = 
       {/* ------------------------------------------------------------ lab */}
       {step === 'lab' && (
         <div className="space-y-3">
-          <DataLab mission={mission} onResult={setLabResult} />
+          <DataLab mission={mission} onResult={setLabResult} location={s.classroom.location} />
           {labResult && <div className="text-sm text-emerald-300">📡 Recorded: {labResult}</div>}
         </div>
       )}

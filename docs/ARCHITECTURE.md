@@ -5,7 +5,7 @@ Browser (React 19 + Vite + Tailwind CDN)
  ├─ #/            Landing（BtoB LP・料金・ROI・リード送信）
  ├─ #/join        生徒参加（教室コード＋ニックネーム、localStorage セッション）
  ├─ #/student/*   MissionList / MissionPlayer / Certificate
- │     └─ labs/   IssTracker・MoonLab・TransitLab・HubbleLab・NumericLab
+ │     └─ labs/   IssTracker・MoonLab・TransitLab・HubbleLab・NumericLab・SkyAboveSchool（住所→上空データ＋NASA GIBS/Sentinel-2タイル）
  │     └─ CommanderChat（Web Speech API：認識 + 合成）
  ├─ #/teacher     TeacherLogin / TeacherDashboard（進捗・レポート・CSV・台本・質問・設定）
  └─ #/present/:m  投影モード（全画面）
@@ -13,6 +13,8 @@ Browser (React 19 + Vite + Tailwind CDN)
         ▼
 Express (server.mjs, Node 22)
  ├─ /api/iss                 wheretheiss.at 中継（5秒キャッシュ、失敗時は円軌道モデル）
+ ├─ /api/geo?q=住所          国土地理院 → Nominatim → 内蔵都市表 の順で解決
+ ├─ /api/sky?lat&lon         ISS通過予報7日分（Celestrak TLE + satellite.js SGP4、影・薄明判定で肉眼可視）、今の距離、日の出入り
  ├─ /api/students/*          参加・結果保存・質問
  ├─ /api/teacher/*           x-classroom-code / x-classroom-pin ヘッダ認証
  ├─ /api/ai/speaking|commander   Gemini 2.5 Flash（@google/genai）／無鍵時はルールベース

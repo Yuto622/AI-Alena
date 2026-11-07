@@ -1,11 +1,11 @@
-import type { Student } from '../types';
+import type { PublicClassroom, Student } from '../types';
 
 const STUDENT_KEY = 'uspace.student';
 const TEACHER_KEY = 'uspace.teacher';
 
 export interface StudentSession {
   student: Student;
-  classroom: { code: string; name: string; unlockedWeeks: number };
+  classroom: PublicClassroom;
 }
 export interface TeacherSession {
   code: string;

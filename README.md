@@ -14,6 +14,7 @@
 | `#/`（LP） | 教室経営者向け。ブルーオーシャンの根拠・8週カリキュラム・料金・ROI試算・資料請求フォーム |
 | `#/join` → `#/student` | 生徒：4桁教室コード＋ニックネームで参加。8ミッション（Briefing→Words→Data Lab→Quiz→Speaking） |
 | Data Lab | 🛰️ ISSライブ位置（5秒更新）／🌙 今夜の月齢／🪐 系外惑星トランジットシミュレータ／🌌 実在銀河団でハッブル定数→宇宙の年齢 |
+| **御校の上空** | **住所を入れるだけ**で、ISSが御校の真上を通る日時・方角・肉眼可視時間（TLE＋SGP4）、今この瞬間の距離、日の出入り・南中、NASA GIBS／Sentinel-2 の衛星写真が LP・先生設定・ミッション1に反映 |
 | AI管制官 | ブラウザ音声認識＋読み上げで英語の音声会話。発話に 1〜5 点のフィードバック |
 | `#/teacher` | 先生：生徒進捗・クイズ・発話語数、保護者向けAIレポート生成、CSV出力、45分台本、投影モード、生徒質問の管理 |
 | `#/student/certificate` | 修了証（本人が測った宇宙の年齢が載る。印刷可） |
@@ -48,6 +49,7 @@ Cloud Run：`Dockerfile` をそのままデプロイ。`GEMINI_API_KEY` を環�
 ```
 content/missions.ts   8ミッション正典（数値は NASA/JAXA/EHT 等の公開値・出典つき）
 content/pricing.ts    料金・ROI 試算（U-Speak と同構造）
+server/sky.mjs        住所→緯度経度（国土地理院）、ISS通過予報（satellite.js/SGP4）、日の出入り。全部オフライン代替あり
 components/           landing / student / teacher / labs
 lib/astro.ts          月齢・ハッブル定数フィット・トランジット深さ
 server.mjs, server/   Express API・JSON ストア・Gemini/ルールベース AI・ISS 中継
