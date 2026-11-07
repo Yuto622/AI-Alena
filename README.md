@@ -1,20 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# U-Space — 宇宙探究 × 英語 SaaS（英会話教室・学習塾・学童向け BtoB）
 
-# Run and deploy your AI Studio app
+> 小学生が、英語で、宇宙の年齢を測る週1クラスを「教材・AI・先生用台本・保護者レポート」一式で教室に提供する。
+> 合同会社 U-Speak Lab の第2プロダクト。U-Speak Roblox と同じ買い手・同じ営業パイプ・同じ料金構造で売る。
 
-This contains everything you need to run your app locally.
+- 事業計画：[docs/BUSINESS_PLAN.md](docs/BUSINESS_PLAN.md)
+- U-Speak 営業の型への写像：[docs/SALES_PLAYBOOK.md](docs/SALES_PLAYBOOK.md)
+- 技術構成：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1OlrCdMBoWvg6LOy0N-Bdd4mccAQ_QI3Z
+## 何ができるか（MVP）
 
-## Run Locally
+| 画面 | 中身 |
+|---|---|
+| `#/`（LP） | 教室経営者向け。ブルーオーシャンの根拠・8週カリキュラム・料金・ROI試算・資料請求フォーム |
+| `#/join` → `#/student` | 生徒：4桁教室コード＋ニックネームで参加。8ミッション（Briefing→Words→Data Lab→Quiz→Speaking） |
+| Data Lab | 🛰️ ISSライブ位置（5秒更新）／🌙 今夜の月齢／🪐 系外惑星トランジットシミュレータ／🌌 実在銀河団でハッブル定数→宇宙の年齢 |
+| AI管制官 | ブラウザ音声認識＋読み上げで英語の音声会話。発話に 1〜5 点のフィードバック |
+| `#/teacher` | 先生：生徒進捗・クイズ・発話語数、保護者向けAIレポート生成、CSV出力、45分台本、投影モード、生徒質問の管理 |
+| `#/student/certificate` | 修了証（本人が測った宇宙の年齢が載る。印刷可） |
 
-**Prerequisites:**  Node.js
+AI は `GEMINI_API_KEY` があれば Gemini、無ければルールベースで動く（デモが止まらない）。
 
+## 起動
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev          # API :8080 + Vite :3000（/api はプロキシ）
+# → http://localhost:3000  デモ教室：コード 1234 / 先生PIN 0000
+```
+
+本番相当：
+
+```bash
+GEMINI_API_KEY=... npm run build && npm start   # :8080 で dist 配信 + API
+```
+
+テスト・型チェック：
+
+```bash
+npm test          # サーバー側（ミッション整合性・AIフォールバック）
+npm run typecheck # フロント
+```
+
+Cloud Run：`Dockerfile` をそのままデプロイ。`GEMINI_API_KEY` を環境変数で渡す。データは `data/db.json`（MVP）。本番は `server/db.mjs` のインターフェースを Firestore / Cloud SQL に差し替える。
+
+## ディレクトリ
+
+```
+content/missions.ts   8ミッション正典（数値は NASA/JAXA/EHT 等の公開値・出典つき）
+content/pricing.ts    料金・ROI 試算（U-Speak と同構造）
+components/           landing / student / teacher / labs
+lib/astro.ts          月齢・ハッブル定数フィット・トランジット深さ
+server.mjs, server/   Express API・JSON ストア・Gemini/ルールベース AI・ISS 中継
+docs/                 事業計画・営業の型・技術構成
+```

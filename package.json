@@ -1,25 +1,33 @@
 {
-  "name": "omnimodel-arena",
+  "name": "u-space",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "U-Space — 英会話教室・学習塾・学童向け 宇宙探究×英語 SaaS（合同会社U-Speak Lab）",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"node server.mjs\" \"vite\"",
+    "dev:web": "vite",
+    "dev:api": "node server.mjs",
     "build": "vite build",
-    "preview": "vite preview"
-    "start": "node server.mjs"
+    "preview": "vite preview",
+    "start": "node server.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test server/*.test.mjs"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "@google/genai": "^1.30.0",
-    "cors": "^2.8.5",
     "express": "^5.2.1",
-    "@google/generative-ai": "^0.24.1"
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "tailwindcss": "^4.3.5",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

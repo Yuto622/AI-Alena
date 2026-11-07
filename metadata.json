@@ -1,5 +1,5 @@
 {
-  "name": "OmniModel Arena",
-  "description": "Compare responses from 8 major AI models side-by-side in a unified interface. Powered by Gemini for demonstration.",
-  "requestFramePermissions": []
+  "name": "U-Space",
+  "description": "宇宙探究×英語の週1クラスを、英会話教室・学習塾・学童にSaaSで提供。UCLA天文物理の研究者監修。生徒ミッション画面＋先生ダッシュボード＋AI保護者レポート。",
+  "requestFramePermissions": ["microphone"]
 }

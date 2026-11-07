@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --color-space-950: #070a1a;
+  --color-space-900: #0b1026;
+  --color-space-800: #121a3a;
+  --color-space-700: #1c2750;
+  --color-space-600: #2a3a72;
+  --color-brand-green: #1b3a2f;
+  --color-brand-orange: #e27a2d;
+  --color-brand-cream: #faf6ee;
+  --font-sans: "Noto Sans JP", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Noto Sans JP", sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-sans); background: #070a1a; color: #f1f5f9; overscroll-behavior-y: none; }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.starfield {
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,.8), transparent),
+    radial-gradient(1px 1px at 140px 80px, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.5px 1.5px at 260px 40px, rgba(255,255,255,.9), transparent),
+    radial-gradient(1px 1px at 380px 120px, rgba(255,255,255,.5), transparent),
+    radial-gradient(1px 1px at 90px 170px, rgba(255,255,255,.7), transparent),
+    radial-gradient(1.5px 1.5px at 320px 200px, rgba(226,122,45,.9), transparent),
+    radial-gradient(1px 1px at 220px 150px, rgba(255,255,255,.6), transparent);
+  background-size: 420px 240px;
+}
+.glass { background: rgba(18, 26, 58, .55); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.08); }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #2a3a72; border-radius: 3px; }
+@keyframes floaty { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+.floaty { animation: floaty 4s ease-in-out infinite; }
+@media print {
+  body { background: #fff; color: #111; }
+  .no-print { display: none !important; }
+}

@@ -1,36 +1,23 @@
-# ---- ビルドステージ ----
-FROM node:20 AS builder
-
+# ---- build stage ----
+FROM node:22-slim AS builder
 WORKDIR /app
-
-# 依存関係インストール
-# npm ci → npm install に変更（package-lock.json が無いため）
 COPY package*.json ./
-RUN npm install
-
-# ソースコピー
+RUN npm ci
 COPY . .
-
-# Vite ビルド（dist/ を作る）
 RUN npm run build
 
-# ---- 本番ステージ ----
-FROM node:20-slim
-
+# ---- runtime stage (Cloud Run) ----
+FROM node:22-slim
 WORKDIR /app
-
-# server.mjs と package.json をコピー
-COPY package*.json ./
-COPY server.mjs ./server.mjs
-
-# dist もコピー
-COPY --from=builder /app/dist ./dist
-
-# 本番用の依存関係だけインストール
-RUN npm install --only=production
-
 ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY server.mjs ./server.mjs
+COPY server ./server
+COPY content ./content
+COPY --from=builder /app/dist ./dist
+# 永続データは Cloud Run では揮発するため、本番は DATA_DIR をマウント or DB へ差し替える
+ENV DATA_DIR=/app/data
 ENV PORT=8080
 EXPOSE 8080
-
 CMD ["node", "server.mjs"]
