@@ -7,6 +7,7 @@ Browser (React 19 + Vite + Tailwind CDN)
  ├─ #/student/*   MissionList / MissionPlayer / Certificate
  │     └─ labs/   IssTracker・MoonLab・TransitLab・HubbleLab・NumericLab・SkyAboveSchool（住所→上空データ＋NASA GIBS/Sentinel-2タイル）
  │     └─ CommanderChat（Web Speech API：認識 + 合成）
+ │     └─ metaverse/SchoolToSpace（three.js：Sentinel-2 ×Terrarium 標高で街を生成 → Blue Marble 地球 → ISS。鍵なしタイル、全てオフライン代替あり。Roblox Terrain Import 用の高さ図/カラーマップ書き出し）
  ├─ #/teacher     TeacherLogin / TeacherDashboard（進捗・レポート・CSV・台本・質問・設定）
  └─ #/present/:m  投影モード（全画面）
         │  fetch /api/*

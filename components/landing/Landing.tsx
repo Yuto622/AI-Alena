@@ -6,6 +6,7 @@ import { navigate } from '../../lib/router';
 import type { PlanId } from '../../types';
 import { Button, Card, Input, Pill, Stat, Textarea } from '../ui';
 import { SkyAboveSchool } from '../labs/SkyAboveSchool';
+import { SchoolToSpace } from '../metaverse/SchoolToSpace';
 
 const yen = (n: number) => `¥${Math.round(n).toLocaleString('ja-JP')}`;
 
@@ -14,6 +15,7 @@ export const Landing: React.FC = () => {
     <div className="space-y-20">
       <Hero />
       <AddressDemo />
+      <MetaverseDemo />
       <WhyNow />
       <Curriculum />
       <HowItWorks />
@@ -78,6 +80,14 @@ const AddressDemo: React.FC = () => (
   <section id="sky">
     <SectionTitle kicker="TRY IT NOW" title="御校の住所を入れるだけで、上空の衛星データが教材になる" sub="ISSが御校の真上を通る日時と方角、今この瞬間の距離、日の出入り、NASA/ESAの衛星写真。すべて鍵なしの公開データから自動計算。生徒は「この日の夜、南西の空を見上げる」宿題を持ち帰ります。" />
     <SkyAboveSchool allowInput />
+  </section>
+);
+
+// ---------------------------------------------------------------------------
+const MetaverseDemo: React.FC = () => (
+  <section id="metaverse">
+    <SectionTitle kicker="METAVERSE" title="住所が、メタバースの出発点になる" sub="衛星写真と標高データから御校の街を自動生成。生徒はそこに立ち、打ち上がり、黒くなる空を抜けて、今この瞬間の位置にいるISSまで飛びます。U-Speak Roblox の教室専用ワールドにも地形をそのまま書き出せます。" />
+    <SchoolToSpace location={{ lat: 35.6619, lon: 139.7041, label: '東京都渋谷区神南（デモ）' }} allowInput />
   </section>
 );
 

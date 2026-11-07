@@ -6,6 +6,7 @@ import { TransitLab } from './TransitLab';
 import { HubbleLab } from './HubbleLab';
 import { NumericLab } from './NumericLab';
 import { SkyAboveSchool } from './SkyAboveSchool';
+import { SchoolToSpace } from '../metaverse/SchoolToSpace';
 
 export const DataLab: React.FC<{ mission: Mission; onResult: (text: string) => void; location?: ClassroomLocation | null }> = ({ mission, onResult, location }) => {
   const lab = mission.dataLab;
@@ -25,6 +26,13 @@ export const DataLab: React.FC<{ mission: Mission; onResult: (text: string) => v
     case 'hubble':
       return <HubbleLab onResult={onResult} />;
     case 'orbits':
+      return (
+        <div className="space-y-4">
+          {/* 第8週：自分の教室から打ち上げて ISS まで飛ぶ（住所未登録なら入力欄を出す） */}
+          <SchoolToSpace location={location || undefined} allowInput={!location} onResult={onResult} />
+          <NumericLab title={mission.title} prompt={lab.prompt} answer={lab.answer} tolerance={lab.tolerance} unit={lab.unit} hint={lab.hint} onResult={onResult} />
+        </div>
+      );
     case 'scale':
       return <NumericLab title={mission.title} prompt={lab.prompt} answer={lab.answer} tolerance={lab.tolerance} unit={lab.unit} hint={lab.hint} onResult={onResult} />;
     default:
