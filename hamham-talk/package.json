@@ -1,12 +1,11 @@
 {
   "name": "hamham-talk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "main": "server.mjs",
-  "engines": { "node": ">=20" },
   "scripts": {
-    "start": "node server.mjs",
+    "deploy": "npx wrangler@4 deploy",
+    "dev": "npx wrangler@4 dev",
     "test": "node --test test.mjs"
   }
 }

@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>ハムハムトーク</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#FFF6EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#221A1C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ハムハム">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<style>
+:root {
+  --bg: #FFF6EE; --panel: #FFFFFF; --ink: #4A3228; --sub: #A58A7C; --line: #F1E1D6;
+  --mine: #FF8FA3; --mine-ink: #FFFFFF; --theirs: #FFFFFF; --accent: #F0607C; --soft: #FFE3E8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #221A1C; --panel: #2E2427; --ink: #F6E9E4; --sub: #A8928F; --line: #3D3034;
+    --mine: #E8718A; --mine-ink: #FFFFFF; --theirs: #3A2E32; --accent: #FF8FA3; --soft: #47323A;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: "Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  font-size: 16px; line-height: 1.5; overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+[hidden] { display: none !important; }
+
+/* 入室まえの画面 */
+#gate { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.card { width: min(360px, 100%); text-align: center; }
+.card img { width: 112px; height: 112px; border-radius: 32px; }
+.card h1 { font-size: 26px; margin: 16px 0 4px; letter-spacing: .04em; }
+.card p { color: var(--sub); margin: 0 0 24px; }
+.card input {
+  width: 100%; font: inherit; font-size: 17px; text-align: center; color: var(--ink);
+  padding: 14px; border-radius: 16px; border: 2px solid var(--line); background: var(--panel); outline: none;
+}
+.card input:focus { border-color: var(--mine); }
+.primary {
+  width: 100%; margin-top: 12px; padding: 14px; border-radius: 16px;
+  background: var(--accent); color: #fff; font-weight: 700; font-size: 17px;
+}
+.primary:disabled { opacity: .5; }
+.error { color: var(--accent); min-height: 1.5em; margin-top: 12px; font-size: 14px; }
+
+/* チャット */
+#app { height: 100dvh; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+header {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--line); background: var(--bg);
+}
+header img { width: 40px; height: 40px; border-radius: 14px; }
+header .who { flex: 1; min-width: 0; }
+header .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .days { font-size: 12px; color: var(--sub); }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; }
+.icon-btn:active { background: var(--soft); }
+#banner { background: var(--soft); padding: 12px 16px; font-size: 14px; display: flex; gap: 12px; align-items: center; }
+#banner span { flex: 1; }
+#banner button { background: var(--accent); color: #fff; border-radius: 999px; padding: 8px 14px; font-weight: 700; white-space: nowrap; }
+
+#log { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+.day { align-self: center; font-size: 12px; color: var(--sub); background: var(--soft); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
+.row { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
+.row.mine { flex-direction: row-reverse; }
+.bubble {
+  max-width: min(76%, 480px); padding: 9px 14px; border-radius: 20px; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--theirs); border-bottom-left-radius: 6px; box-shadow: 0 1px 0 var(--line);
+}
+.mine .bubble { background: var(--mine); color: var(--mine-ink); border-radius: 20px; border-bottom-right-radius: 6px; box-shadow: none; }
+.sticker {
+  text-align: center; padding: 10px 16px 8px; border-radius: 28px; background: var(--soft);
+  border: 3px solid #fff; box-shadow: 0 2px 8px rgba(240, 96, 124, .25); transform: rotate(-2deg);
+}
+.mine .sticker { transform: rotate(2deg); }
+.sticker .emo { font-size: 46px; line-height: 1.15; }
+.sticker .cap { font-weight: 800; color: var(--accent); font-size: 15px; }
+.meta { font-size: 11px; color: var(--sub); line-height: 1.3; text-align: right; flex-shrink: 0; }
+.row:not(.mine) .meta { text-align: left; }
+.pending { opacity: .55; }
+#empty { margin: auto; text-align: center; color: var(--sub); }
+
+/* 入力まわり */
+#stickers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+#stickers button { border-radius: 16px; padding: 6px 2px; background: var(--bg); }
+#stickers button:active { background: var(--soft); }
+#stickers .emo { font-size: 28px; line-height: 1.2; }
+#stickers .cap { font-size: 11px; color: var(--sub); }
+#composer {
+  display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); background: var(--panel);
+}
+#text {
+  flex: 1; min-width: 0; resize: none; font: inherit; color: var(--ink); background: var(--bg);
+  border: 0; outline: none; border-radius: 22px; padding: 10px 16px; max-height: 132px;
+}
+#hamu { height: 44px; padding: 0 12px; border-radius: 22px; font-weight: 800; font-size: 14px; color: var(--sub); border: 2px solid var(--line); }
+#hamu[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+#send { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 20px; flex-shrink: 0; }
+#send:disabled { opacity: .4; }
+#status { font-size: 12px; color: var(--sub); text-align: center; padding: 2px; }
+
+/* メニュー */
+dialog { border: 0; border-radius: 24px; padding: 20px; width: min(340px, calc(100% - 32px)); background: var(--panel); color: var(--ink); }
+dialog::backdrop { background: rgba(40, 20, 24, .45); }
+dialog h2 { font-size: 18px; margin: 0 0 12px; }
+dialog .item { display: block; width: 100%; text-align: left; padding: 13px 14px; border-radius: 14px; background: var(--bg); margin-top: 8px; }
+dialog .item small { display: block; color: var(--sub); font-size: 12px; }
+dialog label { display: block; margin-top: 14px; font-size: 14px; color: var(--sub); }
+dialog input[type=date] { width: 100%; font: inherit; color: var(--ink); padding: 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); margin-top: 4px; }
+dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14px; background: var(--soft); font-weight: 700; }
+#toast {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%;
+}
+#toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+
+<main id="gate" hidden>
+  <div class="card">
+    <img src="/icon.svg" alt="">
+    <h1>ハムハムトーク</h1>
+    <p id="gate-lead">ふたりだけのおへやはむ</p>
+    <form id="join" hidden>
+      <input id="name" maxlength="20" placeholder="あなたのなまえ" autocomplete="nickname" required>
+      <button class="primary" id="join-btn">おへやに入る</button>
+    </form>
+    <div class="error" id="gate-error"></div>
+  </div>
+</main>
+
+<div id="app" hidden>
+  <header>
+    <img src="/icon.svg" alt="">
+    <div class="who">
+      <div class="name" id="partner">ハムハムトーク</div>
+      <div class="days" id="days"></div>
+    </div>
+    <button class="icon-btn" id="menu-btn" aria-label="メニュー">☰</button>
+  </header>
+  <div id="banner" hidden><span>まだひとりはむ。招待リンクを送って、あの人を呼ぶはむ🐹</span><button id="invite-btn">リンクをコピー</button></div>
+  <div id="log" aria-live="polite"><div id="empty">さいしょのひとことを<br>送ってみるはむ🐹💕</div></div>
+  <div id="status" hidden>つなぎなおしてるはむ…</div>
+  <div id="stickers" hidden></div>
+  <form id="composer">
+    <button type="button" class="icon-btn" id="sticker-btn" aria-label="スタンプ">🐹</button>
+    <textarea id="text" rows="1" placeholder="メッセージを入力…" enterkeyhint="send"></textarea>
+    <button type="button" id="hamu" aria-pressed="false" title="文末に自動で「はむ」をつける">はむ</button>
+    <button id="send" aria-label="送信" disabled>➤</button>
+  </form>
+</div>
+
+<dialog id="menu">
+  <h2>せってい</h2>
+  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」してから押すはむ</small></button>
+  <button class="item" id="device-btn">📱 べつの端末でも使う<small>自分用の引き継ぎリンクをコピー（ひみつにしてね）</small></button>
+  <label>💕 付き合った日<input type="date" id="anniv"></label>
+  <button class="close" id="menu-close">とじる</button>
+</dialog>
+<div id="toast"></div>
+
+<script type="module">
+import { toHamu, daysTogether } from "/hamu.js";
+
+const $ = (id) => document.getElementById(id);
+const STICKERS = [
+  ["🐹💕", "大好きはむ"], ["🥰", "しあわせはむ"], ["🫶", "ぎゅーはむ"], ["😘", "ちゅっはむ"],
+  ["🥺", "会いたいはむ"], ["🙏✨", "ありがとはむ"], ["💮", "えらいはむ"], ["😳", "てれるはむ"],
+  ["☀️", "おはようはむ"], ["🌙", "おやすみはむ"], ["🍵", "おつかれはむ"], ["🌻", "がんばれはむ"],
+];
+
+// ---- 端末に保存するもの ----
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("login")) store.set("token", hash.get("login"));
+const inviteCode = hash.get("invite");
+if (location.hash) history.replaceState(null, "", location.pathname);
+
+let token = store.get("token");
+let state = null, ws = null, meId = null, partnerRead = 0, retry = 0, anniversary = null;
+const messages = new Map();   // id -> message
+const pending = new Map();    // cid -> 送信中のメッセージ
+let hamuMode = store.get("hamu") === "1";
+
+function toast(text) {
+  $("toast").textContent = text;
+  $("toast").classList.add("show");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => $("toast").classList.remove("show"), 2200);
+}
+async function copy(text, done) {
+  try { await navigator.clipboard.writeText(text); toast(done); }
+  catch { prompt("コピーしてね", text); }
+}
+const api = (path, opts = {}) =>
+  fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    .then(async (r) => ({ ok: r.ok, ...(await r.json()) }));
+
+// ---- 入室 ----
+async function boot() {
+  state = await api("/api/state");
+  if (state.me) return startChat();
+  $("gate").hidden = false;
+  if (state.members >= 2) {
+    $("gate-lead").textContent = "ここはふたりだけのおへやはむ🔒";
+  } else if (state.members === 1 && !inviteCode) {
+    $("gate-lead").textContent = "招待リンクから開いてほしいはむ🐹";
+  } else {
+    $("gate-lead").textContent = state.members === 0 ? "ふたりだけのおへやを作るはむ" : "あの人がまってるはむ💕";
+    $("join").hidden = false;
+    $("name").focus();
+  }
+}
+$("join").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("join-btn").disabled = true;
+  const res = await api("/api/join", { method: "POST", body: JSON.stringify({ name: $("name").value, invite: inviteCode }) });
+  if (!res.ok) { $("gate-error").textContent = res.error; $("join-btn").disabled = false; return; }
+  token = res.token; store.set("token", token);
+  state = await api("/api/state");
+  startChat();
+});
+
+// ---- チャット ----
+function startChat() {
+  $("gate").hidden = true; $("app").hidden = false;
+  setPartner(state.partner);
+  $("hamu").setAttribute("aria-pressed", hamuMode);
+  for (const [emo, cap] of STICKERS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<div class="emo"></div><div class="cap"></div>`;
+    b.children[0].textContent = emo; b.children[1].textContent = cap;
+    b.addEventListener("click", () => { send("sticker", `${emo}|${cap}`); $("stickers").hidden = true; });
+    $("stickers").append(b);
+  }
+  connect();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+function setPartner(name) {
+  $("partner").textContent = name ? `${name} 💕` : "ハムハムトーク";
+  $("banner").hidden = !!name;
+}
+function showDays() {
+  const d = daysTogether(anniversary);
+  $("days").textContent = d ? `ふたりで ${d}日目はむ` : "";
+  $("anniv").value = anniversary ?? "";
+}
+
+function connect() {
+  ws = new WebSocket(`${location.origin.replace(/^http/, "ws")}/api/ws?token=${encodeURIComponent(token)}`);
+  ws.onopen = () => { retry = 0; $("status").hidden = true; sendVisibility(); for (const p of pending.values()) ws.send(JSON.stringify(p.wire)); };
+  ws.onmessage = (e) => { if (e.data !== "pong") handle(JSON.parse(e.data)); };
+  ws.onclose = () => { $("status").hidden = false; setTimeout(connect, Math.min(1000 * 2 ** retry++, 15000)); };
+}
+setInterval(() => { if (ws?.readyState === 1) ws.send("ping"); }, 25000);
+
+function handle(d) {
+  if (d.t === "init") {
+    meId = d.me; partnerRead = d.partnerRead; anniversary = d.anniversary;
+    messages.clear();
+    for (const m of d.messages) messages.set(m.id, m);
+    setPartner(d.partner); showDays(); render(true); markRead();
+  } else if (d.t === "msg") {
+    messages.set(d.m.id, d.m);
+    if (d.cid) pending.delete(d.cid);
+    render(d.m.sender === meId || nearBottom()); markRead();
+  } else if (d.t === "read") {
+    if (d.by !== meId) { partnerRead = Math.max(partnerRead, d.id); render(false); }
+  } else if (d.t === "partner") {
+    setPartner(d.name); toast(`${d.name} がおへやに来たはむ🐹💕`);
+  } else if (d.t === "anniv") {
+    anniversary = d.date || null; showDays();
+  }
+}
+
+const log = $("log");
+const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+const fmtTime = (ts) => new Date(ts).toLocaleTimeString("ja-JP", { hour: "numeric", minute: "2-digit" });
+const fmtDay = (ts) => new Date(ts).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
+
+function render(stick) {
+  const all = [...messages.values(), ...[...pending.values()].map((p) => p.local)];
+  log.replaceChildren();
+  if (!all.length) { const e = document.createElement("div"); e.id = "empty"; e.innerHTML = "さいしょのひとことを<br>送ってみるはむ🐹💕"; log.append(e); return; }
+  let lastDay = "";
+  for (const m of all) {
+    const day = fmtDay(m.ts);
+    if (day !== lastDay) { const d = document.createElement("div"); d.className = "day"; d.textContent = day; log.append(d); lastDay = day; }
+    const mine = m.sender === meId;
+    const row = document.createElement("div");
+    row.className = `row${mine ? " mine" : ""}${m.id ? "" : " pending"}`;
+    let body;
+    if (m.kind === "sticker") {
+      const [emo, cap = ""] = m.body.split("|");
+      body = document.createElement("div"); body.className = "sticker";
+      const e = document.createElement("div"); e.className = "emo"; e.textContent = emo;
+      const c = document.createElement("div"); c.className = "cap"; c.textContent = cap;
+      body.append(e, c);
+    } else {
+      body = document.createElement("div"); body.className = "bubble"; body.textContent = m.body;
+    }
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.innerHTML = (mine && m.id && m.id <= partnerRead ? "既読<br>" : "") + (m.id ? fmtTime(m.ts) : "送信中");
+    row.append(body, meta);
+    log.append(row);
+  }
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+
+function markRead() {
+  if (document.visibilityState !== "visible" || ws?.readyState !== 1) return;
+  let last = 0;
+  for (const m of messages.values()) if (m.sender !== meId) last = Math.max(last, m.id);
+  if (last > (markRead.sent ?? 0)) { ws.send(JSON.stringify({ t: "read", id: last })); markRead.sent = last; }
+}
+function sendVisibility() {
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ t: "vis", v: document.visibilityState === "visible" }));
+}
+document.addEventListener("visibilitychange", () => { sendVisibility(); markRead(); });
+
+function send(kind, body) {
+  const cid = crypto.randomUUID();
+  const wire = { t: "msg", kind, body, cid };
+  pending.set(cid, { wire, local: { sender: meId, kind, body, ts: Date.now() } });
+  if (ws?.readyState === 1) ws.send(JSON.stringify(wire));
+  render(true);
+}
+
+// ---- 入力 ----
+const text = $("text");
+function fit() { text.style.height = "auto"; text.style.height = text.scrollHeight + "px"; $("send").disabled = !text.value.trim(); }
+text.addEventListener("input", fit);
+text.addEventListener("keydown", (e) => {
+  // パソコンは Enter で送信、スマホは改行（送信はボタン）
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(pointer: fine)").matches) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = text.value.trim();
+  if (!value) return;
+  send("text", hamuMode ? toHamu(value) : value);
+  text.value = ""; fit(); text.focus();
+});
+$("hamu").addEventListener("click", () => {
+  hamuMode = !hamuMode; store.set("hamu", hamuMode ? "1" : "0");
+  $("hamu").setAttribute("aria-pressed", hamuMode);
+  toast(hamuMode ? "はむモード ON：文末に「はむ」がつくはむ" : "はむモード OFF");
+});
+$("sticker-btn").addEventListener("click", () => { $("stickers").hidden = !$("stickers").hidden; });
+
+// ---- メニュー ----
+$("menu-btn").addEventListener("click", () => $("menu").showModal());
+$("menu-close").addEventListener("click", () => $("menu").close());
+$("invite-btn").addEventListener("click", () => copy(`${location.origin}/#invite=${state.invite}`, "招待リンクをコピーしたはむ！あの人に送ってね"));
+$("device-btn").addEventListener("click", () => copy(`${location.origin}/#login=${token}`, "引き継ぎリンクをコピーしたはむ"));
+$("anniv").addEventListener("change", (e) => ws?.readyState === 1 && ws.send(JSON.stringify({ t: "anniv", date: e.target.value })));
+$("notify-btn").addEventListener("click", async () => {
+  try {
+    if (!("PushManager" in window)) throw new Error("この画面では通知が使えないはむ（iPhone はホーム画面に追加してね）");
+    if ((await Notification.requestPermission()) !== "granted") throw new Error("通知がゆるされてないはむ");
+    const reg = await navigator.serviceWorker.ready;
+    const key = Uint8Array.from(atob(state.vapidKey.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    const res = await api("/api/push", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) });
+    if (!res.ok) throw new Error("登録に失敗したはむ");
+    toast("通知をオンにしたはむ🔔");
+  } catch (err) { toast(err.message); }
+});
+
+boot().catch(() => { $("gate").hidden = false; $("gate-error").textContent = "つながらなかったはむ…もういちど開いてね"; });
+</script>
+</body>
+</html>

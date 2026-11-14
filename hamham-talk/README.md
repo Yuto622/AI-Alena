@@ -1,74 +1,62 @@
 # ハムハムトーク 🐹💕
 
-ふたり専用の LINE Bot（試作品）。ハムスターの「ハムハム」が、はむ語でお返事します。
+ふたりだけの独自メッセージアプリ（試作品）。LINE もアプリストアも使わず、ブラウザで開いてホーム画面に追加して使います。
+
+## デプロイ（一発）
+
+```bash
+cd hamham-talk && npx wrangler@4 deploy
+```
+
+- 初回だけブラウザが開くので、Cloudflare の無料アカウントでログインします（クレジットカード不要）。
+- 終わると `https://hamham-talk.＜あなたの名前＞.workers.dev` が表示されます。それがアプリの URL です。
+- 環境変数・データベース作成・API キーは一切不要です。
+
+## 使いはじめ
+
+1. デプロイした人が URL を開き、なまえを入れて「おへやに入る」
+2. 画面上の「リンクをコピー」で招待リンクを取り、あの人に送る
+3. あの人がリンクを開いてなまえを入れたら、おへやに鍵がかかります（3人目は入れません）
+
+最初に開いた人が 1 人目になるので、デプロイしたらすぐ自分で開いてください。
 
 ## できること
 
-| 送る言葉 | ハムハムの反応 |
-| --- | --- |
-| `はむ語 今日は楽しかった！` | `今日は楽しかったはむ！` に変換 |
-| `記念日` | 付き合って何日目か／次のキリ番まであと何日か |
-| `おみくじ` | 今日のラブラブおみくじ |
-| `デート案` | デートのアイデア |
-| `大好き` | 照れる |
-| `ヘルプ` | 使い方 |
-| `ID` | 自分の userId を表示（ふたり専用設定に使う） |
-| それ以外 | はむ語で自由におしゃべり（`GEMINI_API_KEY` があれば AI、無ければ定型文） |
+- リアルタイムのメッセージ、既読、日付の区切り
+- 🐹 スタンプ 12 種
+- 「はむ」ボタン: オンにすると文末に自動で「はむ」がつく
+- 付き合った日を入れると「ふたりで ◯日目」を表示
+- 通知（☰ → 通知をオンにする）。iPhone は Safari の共有 →「ホーム画面に追加」をしてから
+- べつの端末でも使う: ☰ から自分用の引き継ぎリンクをコピー（このリンクは本人の鍵なので他人に見せない）
+- ダークモード対応
 
-- 1対1トーク: 何でもお返事します。
-- ふたり＋ハムハムのグループ: 上の合言葉と、「ハムハム」と呼ばれたときだけお返事します。
+## 固定費 0 のしくみ
 
-## 準備（LINE 側・初回だけ）
+Cloudflare Workers の無料プランだけで動きます。
 
-1. [LINE Developers Console](https://developers.line.biz/console/) で Messaging API チャネルを作成（名前: ハムハムトーク）
-2. 「チャネル基本設定」の **チャネルシークレット**、「Messaging API設定」の **チャネルアクセストークン（長期）** を控える
-3. [LINE Official Account Manager](https://manager.line.biz/) の応答設定で **Webhook: オン／応答メッセージ: オフ**、グループで使うなら **グループ参加を許可**
-
-## デプロイ（Google Cloud Run）
-
-```bash
-cd hamham-talk
-export LINE_CHANNEL_SECRET=（チャネルシークレット）
-export LINE_CHANNEL_ACCESS_TOKEN=（チャネルアクセストークン）
-export ANNIVERSARY=2025-01-01      # 任意: 付き合った日
-export GEMINI_API_KEY=（キー）      # 任意: AI おしゃべり用
-./deploy.sh
-```
-
-`deploy.sh` は Cloud Run へのデプロイ → LINE の Webhook URL 登録 → 疎通テストまで行います。
-手動でやる場合は次のコマンドと同じです。
-
-```bash
-gcloud run deploy hamham-talk --source . --region asia-northeast1 --allow-unauthenticated \
-  --set-env-vars "LINE_CHANNEL_SECRET=xxx,LINE_CHANNEL_ACCESS_TOKEN=xxx,ANNIVERSARY=2025-01-01"
-# 表示された URL の末尾に /webhook を付けて、LINE Developers Console の Webhook URL に設定
-```
-
-### ふたり専用にする
-
-1. デプロイ後、ふたりそれぞれがハムハムに `ID` と送る
-2. 返ってきた 2 つの ID を入れて再デプロイ
-
-```bash
-export ALLOWED_USER_IDS=Uxxxxxxxx,Uyyyyyyyy
-./deploy.sh
-```
-
-これ以降、ふたり以外には「ここはふたりだけの秘密のおへやはむ🐹🔒」としか答えません。
-
-## 環境変数
-
-| 名前 | 必須 | 内容 |
+| 部品 | 役割 | 無料枠 |
 | --- | --- | --- |
-| `LINE_CHANNEL_SECRET` | ✅ | Webhook の署名検証用 |
-| `LINE_CHANNEL_ACCESS_TOKEN` | ✅ | 返信用 |
-| `ANNIVERSARY` | | 付き合った日 `YYYY-MM-DD` |
-| `ALLOWED_USER_IDS` | | ふたりの userId（カンマ区切り）。空なら誰でも使える |
-| `GEMINI_API_KEY` | | 自由会話を AI にする |
-| `GEMINI_MODEL` | | 既定 `gemini-2.5-flash` |
+| Workers + 静的アセット | 画面と API | 1 日 10 万リクエスト |
+| Durable Object（SQLite） | メッセージ保存とリアルタイム配信 | 保存 5GB |
 
-## ローカルで確認
+無料枠を超えても課金はされず、その日はエラーになるだけです（有料プランに自分で上げない限り請求は発生しません）。ふたりの会話量なら届きません。
+
+## 構成
+
+```
+wrangler.toml          デプロイ設定
+src/worker.js          API・WebSocket・保存（ふたりのおへや）
+src/push.js            通知の署名
+public/index.html      チャット画面
+public/hamu.js         はむ語変換・記念日計算
+public/sw.js           通知の受け取り
+```
+
+## 開発
 
 ```bash
-npm test     # 依存パッケージなし（Node 20 以上）
+npm test                 # はむ語変換などの単体テスト
+npx wrangler@4 dev       # http://localhost:8787 でローカル起動
 ```
+
+おへやを最初からやり直したいときは `npx wrangler@4 delete` で消してから、もう一度デプロイします（会話もすべて消えます）。
