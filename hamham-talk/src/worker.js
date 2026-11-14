@@ -95,6 +95,26 @@ export class Room extends DurableObject {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
+    // ホーム画面に追加したアプリは Safari と保存領域が別なので、起動 URL に本人の鍵を入れておく
+    if (path === "/api/manifest") {
+      const manifest = {
+        name: "ハムハムトーク",
+        short_name: "ハムハム",
+        start_url: `/?login=${token}`,
+        scope: "/",
+        display: "standalone",
+        background_color: "#FFF6EE",
+        theme_color: "#FFF6EE",
+        icons: [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      };
+      return new Response(JSON.stringify(manifest), {
+        headers: { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
+
     if (path === "/api/push" && request.method === "POST") {
       const { endpoint } = await request.json().catch(() => ({}));
       if (typeof endpoint !== "string" || !endpoint.startsWith("https://")) return json({ error: "bad endpoint" }, 400);

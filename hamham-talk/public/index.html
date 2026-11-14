@@ -137,6 +137,11 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
       <input id="name" maxlength="20" placeholder="あなたのなまえ" autocomplete="nickname" required>
       <button class="primary" id="join-btn">おへやに入る</button>
     </form>
+    <form id="relink" hidden>
+      <p style="margin:20px 0 8px;font-size:14px">もうメンバーのひとは、引き継ぎリンクを貼ってね</p>
+      <input id="relink-url" placeholder="引き継ぎリンクを貼る" autocomplete="off" required>
+      <button class="primary">このリンクで入る</button>
+    </form>
     <div class="error" id="gate-error"></div>
   </div>
 </main>
@@ -164,7 +169,7 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
 
 <dialog id="menu">
   <h2>せってい</h2>
-  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」してから押すはむ</small></button>
+  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」したアプリの中で押すはむ</small></button>
   <button class="item" id="device-btn">📱 べつの端末でも使う<small>自分用の引き継ぎリンクをコピー（ひみつにしてね）</small></button>
   <label>💕 付き合った日<input type="date" id="anniv"></label>
   <button class="close" id="menu-close">とじる</button>
@@ -186,10 +191,15 @@ const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
 };
-const hash = new URLSearchParams(location.hash.slice(1));
+// リンクの #login= / ?login=（ホーム画面アプリの起動 URL）から鍵を受け取る
+const readLink = (url) => {
+  try { const u = new URL(url, location.origin); return new URLSearchParams(u.hash.slice(1) || u.search); }
+  catch { return new URLSearchParams(); }
+};
+const hash = readLink(location.href);
 if (hash.get("login")) store.set("token", hash.get("login"));
 const inviteCode = hash.get("invite");
-if (location.hash) history.replaceState(null, "", location.pathname);
+if (location.hash || location.search) history.replaceState(null, "", location.pathname);
 
 let token = store.get("token");
 let state = null, ws = null, meId = null, partnerRead = 0, retry = 0, anniversary = null;
@@ -216,6 +226,7 @@ async function boot() {
   state = await api("/api/state");
   if (state.me) return startChat();
   $("gate").hidden = false;
+  $("relink").hidden = state.members === 0;
   if (state.members >= 2) {
     $("gate-lead").textContent = "ここはふたりだけのおへやはむ🔒";
   } else if (state.members === 1 && !inviteCode) {
@@ -236,9 +247,20 @@ $("join").addEventListener("submit", async (e) => {
   startChat();
 });
 
+$("relink").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const t = readLink($("relink-url").value.trim()).get("login");
+  const res = t ? await fetch("/api/state", { headers: { Authorization: `Bearer ${t}` } }).then((r) => r.json()) : {};
+  if (!res.me) { $("gate-error").textContent = "このリンクでは入れなかったはむ…"; return; }
+  token = t; store.set("token", t); state = res;
+  startChat();
+});
+
 // ---- チャット ----
 function startChat() {
   $("gate").hidden = true; $("app").hidden = false;
+  // ホーム画面に追加したとき、この端末の鍵つきで起動するようにする
+  document.querySelector('link[rel="manifest"]').href = `/api/manifest?token=${encodeURIComponent(token)}`;
   setPartner(state.partner);
   $("hamu").setAttribute("aria-pressed", hamuMode);
   for (const [emo, cap] of STICKERS) {
