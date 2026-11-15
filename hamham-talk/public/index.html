@@ -24,7 +24,7 @@
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; margin: 0; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
 body {
   background: var(--bg); color: var(--ink);
   font-family: "Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
@@ -54,7 +54,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .error { color: var(--accent); min-height: 1.5em; margin-top: 12px; font-size: 14px; }
 
 /* チャット */
-#app { height: 100dvh; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+#app { position: fixed; top: 0; left: 0; right: 0; height: var(--vvh, 100dvh); transform: translateY(var(--vvt, 0px));
+  display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
 header {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px;
   padding-top: calc(10px + env(safe-area-inset-top));
@@ -443,7 +444,7 @@ function render(stick) {
   }
   while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
   for (const k of nodes.keys()) if (!seen.has(k)) nodes.delete(k);
-  if (stick) log.scrollTop = log.scrollHeight;
+  if (stick) { log.scrollTop = log.scrollHeight; pinned = true; }
   updateDown();
 }
 
@@ -454,7 +455,20 @@ function updateDown() {
   $("down").hidden = !away;
   $("unread").hidden = !unread; $("unread").textContent = unread ? (unread > 99 ? "99+" : String(unread)) : "";
 }
-log.addEventListener("scroll", updateDown, { passive: true });
+// 「いちばん下を見ている」あいだは、キーボードや入力欄の高さが変わっても下に付いたままにする
+let pinned = true;
+log.addEventListener("scroll", () => { pinned = nearBottom(); updateDown(); }, { passive: true });
+new ResizeObserver(() => { if (pinned) { log.scrollTop = log.scrollHeight; updateDown(); } }).observe(log);
+const vv = window.visualViewport;
+function fitViewport() {
+  if (!vv) return;
+  const root = document.documentElement.style;
+  root.setProperty("--vvh", `${vv.height}px`);
+  root.setProperty("--vvt", `${vv.offsetTop}px`);
+  if (window.scrollY) window.scrollTo(0, 0);
+}
+vv?.addEventListener("resize", fitViewport); vv?.addEventListener("scroll", fitViewport);
+fitViewport();
 $("down").addEventListener("click", () => log.scrollTo({ top: log.scrollHeight, behavior: "smooth" }));
 log.addEventListener("pointerdown", () => { $("stickers").hidden = true; }, { passive: true });
 
@@ -492,6 +506,8 @@ $("composer").addEventListener("submit", (e) => {
   send("text", hamuMode ? toHamu(value) : value);
   text.value = ""; fit(); text.focus();
 });
+$("send").addEventListener("mousedown", (e) => e.preventDefault());
+$("hamu").addEventListener("mousedown", (e) => e.preventDefault());
 $("hamu").addEventListener("click", () => {
   hamuMode = !hamuMode; store.set("hamu", hamuMode ? "1" : "0");
   $("hamu").setAttribute("aria-pressed", hamuMode);
