@@ -90,6 +90,11 @@ header .days { font-size: 12px; color: var(--sub); }
 .meta { font-size: 11px; color: var(--sub); line-height: 1.3; text-align: right; flex-shrink: 0; }
 .row:not(.mine) .meta { text-align: left; }
 .pending { opacity: .55; }
+.photo { display: block; max-width: min(72vw, 320px); max-height: 60vh; width: auto; height: auto; border-radius: 18px; background: var(--soft); cursor: zoom-in; }
+.photo-box { border-radius: 18px; overflow: hidden; line-height: 0; }
+#viewer { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.92); display: grid; place-items: center; }
+#viewer img { max-width: 100vw; max-height: 100dvh; object-fit: contain; }
+#viewer a { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 16px; color: #fff; font-size: 14px; padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,.2); text-decoration: none; }
 #empty { margin: auto; text-align: center; color: var(--sub); }
 
 /* 入力まわり */
@@ -161,6 +166,8 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
   <div id="status" hidden>つなぎなおしてるはむ…</div>
   <div id="stickers" hidden></div>
   <form id="composer">
+    <button type="button" class="icon-btn" id="photo-btn" aria-label="写真">📷</button>
+    <input type="file" id="photo" accept="image/*" hidden>
     <button type="button" class="icon-btn" id="sticker-btn" aria-label="スタンプ">🐹</button>
     <textarea id="text" rows="1" placeholder="メッセージを入力…" enterkeyhint="send"></textarea>
     <button type="button" id="hamu" aria-pressed="false" title="文末に自動で「はむ」をつける">はむ</button>
@@ -176,6 +183,7 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
   <label>💕 付き合った日<input type="date" id="anniv"></label>
   <button class="close" id="menu-close">とじる</button>
 </dialog>
+<div id="viewer" hidden><a id="viewer-close" href="#">✕ とじる</a><img alt=""></div>
 <div id="toast"></div>
 
 <script type="module">
@@ -298,7 +306,7 @@ function showDays() {
 
 function connect() {
   ws = new WebSocket(`${location.origin.replace(/^http/, "ws")}/api/ws?token=${encodeURIComponent(token)}`);
-  ws.onopen = () => { retry = 0; $("status").hidden = true; sendVisibility(); for (const p of pending.values()) ws.send(JSON.stringify(p.wire)); };
+  ws.onopen = () => { retry = 0; $("status").hidden = true; sendVisibility(); for (const p of pending.values()) if (p.wire) ws.send(JSON.stringify(p.wire)); };
   ws.onmessage = (e) => { if (e.data !== "pong") handle(JSON.parse(e.data)); };
   ws.onclose = async () => {
     $("status").hidden = false;
@@ -347,7 +355,15 @@ function render(stick) {
     const row = document.createElement("div");
     row.className = `row${mine ? " mine" : ""}${m.id ? "" : " pending"}`;
     let body;
-    if (m.kind === "sticker") {
+    if (m.kind === "image") {
+      const [id, w, h] = m.body.split("|");
+      body = document.createElement("div"); body.className = "photo-box";
+      const im = document.createElement("img"); im.className = "photo"; im.alt = "写真"; im.loading = "lazy";
+      im.src = m.preview ?? `/api/img/${id}?token=${encodeURIComponent(token)}`;
+      if (w && h) { im.width = +w; im.height = +h; }
+      im.addEventListener("click", () => openViewer(im.src));
+      body.append(im);
+    } else if (m.kind === "sticker") {
       const [emo, cap = ""] = m.body.split("|");
       body = document.createElement("div"); body.className = "sticker";
       const e = document.createElement("div"); e.className = "emo"; e.textContent = emo;
@@ -403,6 +419,46 @@ $("hamu").addEventListener("click", () => {
   $("hamu").setAttribute("aria-pressed", hamuMode);
   toast(hamuMode ? "はむモード ON：文末に「はむ」がつくはむ" : "はむモード OFF");
 });
+// ---- 写真 ----
+const MAX_SIDE = 1280;
+async function toJpeg(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(bmp, 0, 0, w, h);
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+  return { blob, w, h };
+}
+async function sendPhoto(file) {
+  const cid = crypto.randomUUID();
+  let preview;
+  try {
+    const { blob, w, h } = await toJpeg(file);
+    preview = URL.createObjectURL(blob);
+    // 送信中は手元のプレビューを薄く表示
+    pending.set(cid, { wire: null, local: { sender: meId, kind: "image", body: `x|${w}|${h}`, preview, ts: Date.now() } });
+    render(true);
+    const res = await fetch("/api/upload", { method: "POST", body: blob, headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    const wire = { t: "msg", kind: "image", body: `${data.id}|${w}|${h}`, cid };
+    pending.get(cid).wire = wire;
+    if (ws?.readyState === 1) ws.send(JSON.stringify(wire));
+    else throw new Error("つながってないはむ。もういちど送ってね");
+  } catch (err) {
+    pending.delete(cid); render(false);
+    toast(err.message?.includes("はむ") ? err.message : "写真を送れなかったはむ…");
+  }
+}
+$("photo-btn").addEventListener("click", () => $("photo").click());
+$("photo").addEventListener("change", async (e) => {
+  for (const f of e.target.files) await sendPhoto(f);
+  e.target.value = "";
+});
+function openViewer(src) { $("viewer").querySelector("img").src = src; $("viewer").hidden = false; }
+$("viewer").addEventListener("click", (e) => { if (e.target.id !== "viewer-close" || e.preventDefault() === undefined) $("viewer").hidden = true; });
+
 $("sticker-btn").addEventListener("click", () => { $("stickers").hidden = !$("stickers").hidden; });
 
 // ---- メニュー ----

@@ -11,6 +11,9 @@ const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart
 const randomHex = (bytes) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
 const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+const MAX_IMAGE = 1_500_000; // 端末側で縮小してから送るので、ふつうは 数百KB
+const IMAGE_BODY = /^([0-9a-f]{32})\|(\d{1,5})\|(\d{1,5})$/;
+
 const MIN_PASSWORD = 6;
 const MAX_FAILS = 5; // これ以上まちがえると、しばらくログインできなくなる
 
@@ -49,6 +52,7 @@ export class Room extends DurableObject {
       CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender INTEGER NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, ts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS subs (endpoint TEXT PRIMARY KEY, member INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, data BLOB NOT NULL, ts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, member INTEGER NOT NULL, ts INTEGER NOT NULL);
     `);
     // ログイン制にする前に作られたおへや用の列追加（すでにあれば何もしない）
@@ -166,6 +170,25 @@ export class Room extends DurableObject {
       return json({ ok: true });
     }
 
+    if (path === "/api/upload" && request.method === "POST") {
+      const data = await request.arrayBuffer();
+      if (data.byteLength > MAX_IMAGE) return json({ error: "画像が大きすぎるはむ" }, 413);
+      const head = new Uint8Array(data.slice(0, 3));
+      if (head[0] !== 0xff || head[1] !== 0xd8 || head[2] !== 0xff) return json({ error: "JPEG だけ送れるはむ" }, 415);
+      const id = randomHex(16);
+      this.sql.exec("INSERT INTO images (id, data, ts) VALUES (?, ?, ?)", id, data, Date.now());
+      return json({ id });
+    }
+
+    const img = /^\/api\/img\/([0-9a-f]{32})$/.exec(path);
+    if (img && request.method === "GET") {
+      const row = this.sql.exec("SELECT data FROM images WHERE id = ?", img[1]).toArray()[0];
+      if (!row) return json({ error: "not found" }, 404);
+      return new Response(row.data, {
+        headers: { "Content-Type": "image/jpeg", "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable" },
+      });
+    }
+
     if (path === "/api/logout" && request.method === "POST") {
       this.sql.exec("DELETE FROM sessions WHERE token = ?", token);
       return json({ ok: true });
@@ -222,8 +245,12 @@ export class Room extends DurableObject {
     const meId = att.id;
 
     if (data.t === "msg") {
-      const kind = data.kind === "sticker" ? "sticker" : "text";
+      const kind = ["sticker", "image"].includes(data.kind) ? data.kind : "text";
       const body = String(data.body ?? "").slice(0, MAX_TEXT);
+      if (kind === "image") {
+        const m = IMAGE_BODY.exec(body);
+        if (!m || !this.sql.exec("SELECT 1 FROM images WHERE id = ?", m[1]).toArray().length) return;
+      }
       if (!body.trim()) return;
       const ts = Date.now();
       const { id } = this.sql
