@@ -49,6 +49,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   background: var(--accent); color: #fff; font-weight: 700; font-size: 17px;
 }
 .primary:disabled { opacity: .5; }
+.card input + input { margin-top: 8px; }
+.link { margin-top: 16px; color: var(--sub); text-decoration: underline; font-size: 14px; padding: 8px; }
 .error { color: var(--accent); min-height: 1.5em; margin-top: 12px; font-size: 14px; }
 
 /* チャット */
@@ -133,14 +135,11 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
     <img src="/icon.svg" alt="">
     <h1>ハムハムトーク</h1>
     <p id="gate-lead">ふたりだけのおへやはむ</p>
-    <form id="join" hidden>
-      <input id="name" maxlength="20" placeholder="あなたのなまえ" autocomplete="nickname" required>
-      <button class="primary" id="join-btn">おへやに入る</button>
-    </form>
-    <form id="relink" hidden>
-      <p style="margin:20px 0 8px;font-size:14px">もうメンバーのひとは、引き継ぎリンクを貼ってね</p>
-      <input id="relink-url" placeholder="引き継ぎリンクを貼る" autocomplete="off" required>
-      <button class="primary">このリンクで入る</button>
+    <form id="auth" hidden>
+      <input id="name" maxlength="20" placeholder="なまえ" autocomplete="username" autocapitalize="off" required>
+      <input id="password" type="password" minlength="6" maxlength="100" placeholder="パスワード（6文字以上）" autocomplete="current-password" required>
+      <button class="primary" id="auth-btn">ログイン</button>
+      <button type="button" class="link" id="switch" hidden></button>
     </form>
     <div class="error" id="gate-error"></div>
   </div>
@@ -169,8 +168,9 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
 
 <dialog id="menu">
   <h2>せってい</h2>
-  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」したアプリの中で押すはむ</small></button>
-  <button class="item" id="device-btn">📱 べつの端末でも使う<small>自分用の引き継ぎリンクをコピー（ひみつにしてね）</small></button>
+  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」したアプリの中でログインして押すはむ</small></button>
+  <button class="item" id="pass-btn">🔑 パスワードを変える<small>ほかの端末はログアウトされるはむ</small></button>
+  <button class="item" id="logout-btn">🚪 ログアウト<small>べつの端末では、なまえとパスワードでログインできるはむ</small></button>
   <label>💕 付き合った日<input type="date" id="anniv"></label>
   <button class="close" id="menu-close">とじる</button>
 </dialog>
@@ -222,45 +222,49 @@ const api = (path, opts = {}) =>
     .then(async (r) => ({ ok: r.ok, ...(await r.json()) }));
 
 // ---- 入室 ----
+let mode = "login"; // login: ログイン / join: はじめての登録 / setpass: 旧メンバーのパスワード設定
+function setMode(next) {
+  mode = next;
+  const canJoin = state.members === 0 || (state.members === 1 && !!inviteCode);
+  const canLogin = state.members >= 1;
+  $("gate-lead").textContent = {
+    login: "ふたりだけのおへやはむ🔒 ログインしてね",
+    join: state.members === 0 ? "ふたりだけのおへやを作るはむ" : "あの人がまってるはむ💕 登録してね",
+    setpass: `${state.me?.name} のパスワードを決めるはむ。これで別の端末からも入れるはむ`,
+  }[mode];
+  $("auth-btn").textContent = { login: "ログイン", join: "登録しておへやに入る", setpass: "パスワードを決める" }[mode];
+  $("name").hidden = mode === "setpass"; $("name").required = mode !== "setpass";
+  $("password").autocomplete = mode === "login" ? "current-password" : "new-password";
+  $("switch").hidden = mode === "setpass" || !(canJoin && canLogin);
+  $("switch").textContent = mode === "join" ? "もう登録してる人はログイン" : "はじめての人は登録";
+  $("gate-error").textContent = "";
+  $("auth").hidden = false;
+}
 async function boot() {
   state = await api("/api/state");
-  if (state.me) return startChat();
+  if (state.me && !state.me.needsPassword) return startChat();
   $("gate").hidden = false;
-  $("relink").hidden = state.members === 0;
-  if (state.members >= 2) {
-    $("gate-lead").textContent = "ここはふたりだけのおへやはむ🔒";
-  } else if (state.members === 1 && !inviteCode) {
-    $("gate-lead").textContent = "招待リンクから開いてほしいはむ🐹";
-  } else {
-    $("gate-lead").textContent = state.members === 0 ? "ふたりだけのおへやを作るはむ" : "あの人がまってるはむ💕";
-    $("join").hidden = false;
-    $("name").focus();
-  }
+  if (state.me) setMode("setpass");
+  else if (state.members === 0 || (state.members === 1 && inviteCode)) setMode("join");
+  else setMode("login");
 }
-$("join").addEventListener("submit", async (e) => {
+$("switch").addEventListener("click", () => setMode(mode === "join" ? "login" : "join"));
+$("auth").addEventListener("submit", async (e) => {
   e.preventDefault();
-  $("join-btn").disabled = true;
-  const res = await api("/api/join", { method: "POST", body: JSON.stringify({ name: $("name").value, invite: inviteCode }) });
-  if (!res.ok) { $("gate-error").textContent = res.error; $("join-btn").disabled = false; return; }
-  token = res.token; store.set("token", token);
+  $("auth-btn").disabled = true; $("gate-error").textContent = "";
+  const path = { join: "/api/join", login: "/api/login", setpass: "/api/password" }[mode];
+  const res = await api(path, { method: "POST", body: JSON.stringify({ name: $("name").value, password: $("password").value, invite: inviteCode }) })
+    .catch(() => ({ error: "つながらなかったはむ…" }));
+  $("auth-btn").disabled = false;
+  if (!res.ok) { $("gate-error").textContent = res.error; return; }
+  if (res.token) { token = res.token; store.set("token", token); }
   state = await api("/api/state");
-  startChat();
-});
-
-$("relink").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const t = readLink($("relink-url").value.trim()).get("login");
-  const res = t ? await fetch("/api/state", { headers: { Authorization: `Bearer ${t}` } }).then((r) => r.json()) : {};
-  if (!res.me) { $("gate-error").textContent = "このリンクでは入れなかったはむ…"; return; }
-  token = t; store.set("token", t); state = res;
   startChat();
 });
 
 // ---- チャット ----
 function startChat() {
   $("gate").hidden = true; $("app").hidden = false;
-  // ホーム画面に追加したとき、この端末の鍵つきで起動するようにする
-  document.querySelector('link[rel="manifest"]').href = `/api/manifest?token=${encodeURIComponent(token)}`;
   setPartner(state.partner);
   $("hamu").setAttribute("aria-pressed", hamuMode);
   for (const [emo, cap] of STICKERS) {
@@ -288,7 +292,12 @@ function connect() {
   ws = new WebSocket(`${location.origin.replace(/^http/, "ws")}/api/ws?token=${encodeURIComponent(token)}`);
   ws.onopen = () => { retry = 0; $("status").hidden = true; sendVisibility(); for (const p of pending.values()) ws.send(JSON.stringify(p.wire)); };
   ws.onmessage = (e) => { if (e.data !== "pong") handle(JSON.parse(e.data)); };
-  ws.onclose = () => { $("status").hidden = false; setTimeout(connect, Math.min(1000 * 2 ** retry++, 15000)); };
+  ws.onclose = async () => {
+    $("status").hidden = false;
+    // ログアウトされていたら（パスワード変更など）ログイン画面にもどる
+    if (retry >= 2 && (await api("/api/state").catch(() => null))?.me === null) { store.set("token", ""); return location.reload(); }
+    setTimeout(connect, Math.min(1000 * 2 ** retry++, 15000));
+  };
 }
 setInterval(() => { if (ws?.readyState === 1) ws.send("ping"); }, 25000);
 
@@ -390,7 +399,19 @@ $("sticker-btn").addEventListener("click", () => { $("stickers").hidden = !$("st
 $("menu-btn").addEventListener("click", () => $("menu").showModal());
 $("menu-close").addEventListener("click", () => $("menu").close());
 $("invite-btn").addEventListener("click", () => copy(`${location.origin}/#invite=${state.invite}`, "招待リンクをコピーしたはむ！あの人に送ってね"));
-$("device-btn").addEventListener("click", () => copy(`${location.origin}/#login=${token}`, "引き継ぎリンクをコピーしたはむ"));
+$("pass-btn").addEventListener("click", async () => {
+  const password = prompt("新しいパスワード（6文字以上）");
+  if (!password) return;
+  const res = await api("/api/password", { method: "POST", body: JSON.stringify({ password }) });
+  toast(res.ok ? "パスワードを変えたはむ🔑" : res.error);
+});
+$("logout-btn").addEventListener("click", async () => {
+  if (!confirm("ログアウトするはむ？")) return;
+  try { await (await (await navigator.serviceWorker?.getRegistration())?.pushManager.getSubscription())?.unsubscribe(); } catch {}
+  await api("/api/logout", { method: "POST" }).catch(() => {});
+  store.set("token", "");
+  location.reload();
+});
 $("anniv").addEventListener("change", (e) => ws?.readyState === 1 && ws.send(JSON.stringify({ t: "anniv", date: e.target.value })));
 $("notify-btn").addEventListener("click", async () => {
   try {

@@ -7,8 +7,28 @@ const MAX_TEXT = 2000;
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
-const randomHex = (bytes) =>
-  [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+const randomHex = (bytes) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const MIN_PASSWORD = 6;
+const MAX_FAILS = 5; // これ以上まちがえると、しばらくログインできなくなる
+
+/** パスワードは PBKDF2 でハッシュ化して保存する（"salt:hash"） */
+async function hashPassword(password, saltHex = randomHex(16)) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const salt = Uint8Array.from(saltHex.match(/../g), (h) => parseInt(h, 16));
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 100000 }, key, 256);
+  return `${saltHex}:${hex(bits)}`;
+}
+async function checkPassword(password, stored) {
+  if (!stored) return false;
+  const again = await hashPassword(password, stored.split(":")[0]);
+  let diff = again.length ^ stored.length;
+  for (let i = 0; i < again.length; i++) diff |= again.charCodeAt(i) ^ stored.charCodeAt(i % stored.length);
+  return diff === 0;
+}
+const validPassword = (p) => typeof p === "string" && p.length >= MIN_PASSWORD && p.length <= 100;
 
 export default {
   fetch(request, env) {
@@ -29,7 +49,14 @@ export class Room extends DurableObject {
       CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, sender INTEGER NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, ts INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS subs (endpoint TEXT PRIMARY KEY, member INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, member INTEGER NOT NULL, ts INTEGER NOT NULL);
     `);
+    // ログイン制にする前に作られたおへや用の列追加（すでにあれば何もしない）
+    for (const col of ["pass TEXT", "fails INTEGER NOT NULL DEFAULT 0", "lock_until INTEGER NOT NULL DEFAULT 0"]) {
+      try {
+        this.sql.exec(`ALTER TABLE members ADD COLUMN ${col}`);
+      } catch {}
+    }
     // 生存確認の ping はおへやを起こさずに自動で返す（無料枠の節約）
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -42,6 +69,12 @@ export class Room extends DurableObject {
   }
   members() {
     return this.sql.exec("SELECT id, name, read_id FROM members ORDER BY id").toArray();
+  }
+  /** この端末用のログイン状態（セッション）を作る */
+  newSession(memberId) {
+    const token = randomHex(24);
+    this.sql.exec("INSERT INTO sessions (token, member, ts) VALUES (?, ?, ?)", token, memberId, Date.now());
+    return token;
   }
   async vapid() {
     let keys = JSON.parse(this.get("vapid") ?? "null");
@@ -56,13 +89,17 @@ export class Room extends DurableObject {
     const url = new URL(request.url);
     const path = url.pathname;
     const token = url.searchParams.get("token") || (request.headers.get("Authorization") ?? "").replace(/^Bearer /, "");
-    const me = token ? this.sql.exec("SELECT id, name FROM members WHERE token = ?", token).toArray()[0] : null;
+    const me = token
+      ? this.sql
+          .exec("SELECT id, name, pass FROM members WHERE token = ?1 OR id IN (SELECT member FROM sessions WHERE token = ?1)", token)
+          .toArray()[0]
+      : null;
     const members = this.members();
 
     if (path === "/api/state") {
       if (!me) return json({ me: null, members: members.length });
       return json({
-        me,
+        me: { id: me.id, name: me.name, needsPassword: !me.pass },
         partner: members.find((m) => m.id !== me.id)?.name ?? null,
         invite: members.length < 2 ? this.get("invite") : null,
         vapidKey: (await this.vapid()).publicKey,
@@ -73,15 +110,40 @@ export class Room extends DurableObject {
       const body = await request.json().catch(() => ({}));
       const name = String(body.name ?? "").trim().slice(0, 20);
       if (!name) return json({ error: "なまえを入れてほしいはむ" }, 400);
+      if (!validPassword(body.password)) return json({ error: `パスワードは${MIN_PASSWORD}文字以上にしてほしいはむ` }, 400);
+      if (members.some((m) => sameName(m.name, name))) return json({ error: "そのなまえはもう使われてるはむ" }, 400);
       if (members.length >= 2) return json({ error: "ここはふたりだけのおへやはむ🔒" }, 403);
       if (members.length === 1 && body.invite !== this.get("invite")) {
         return json({ error: "招待リンクから開いてほしいはむ" }, 403);
       }
       if (members.length === 0) this.set("invite", randomHex(16));
-      const newToken = randomHex(24);
-      this.sql.exec("INSERT INTO members (name, token) VALUES (?, ?)", name, newToken);
+      const pass = await hashPassword(body.password);
+      // 待っているあいだに先を越されていないか、もう一度たしかめる
+      if (this.members().length !== members.length) return json({ error: "もういちど試してほしいはむ" }, 409);
+      const { id } = this.sql
+        .exec("INSERT INTO members (name, token, pass) VALUES (?, ?, ?) RETURNING id", name, randomHex(24), pass)
+        .one();
       this.broadcast({ t: "partner", name });
-      return json({ token: newToken });
+      return json({ token: this.newSession(id) });
+    }
+
+    if (path === "/api/login" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const wrong = json({ error: "なまえかパスワードがちがうはむ" }, 401);
+      const row = this.sql
+        .exec("SELECT id, name, pass, fails, lock_until FROM members")
+        .toArray()
+        .find((m) => sameName(m.name, String(body.name ?? "")));
+      if (!row) return wrong;
+      if (row.lock_until > Date.now()) return json({ error: "まちがいが多いはむ。少し待ってからためしてね" }, 429);
+      if (!(await checkPassword(String(body.password ?? ""), row.pass))) {
+        const fails = row.fails + 1;
+        const lock = fails >= MAX_FAILS ? Date.now() + Math.min(2 ** (fails - MAX_FAILS), 15) * 60000 : 0;
+        this.sql.exec("UPDATE members SET fails = ?, lock_until = ? WHERE id = ?", fails, lock, row.id);
+        return wrong;
+      }
+      this.sql.exec("UPDATE members SET fails = 0, lock_until = 0 WHERE id = ?", row.id);
+      return json({ token: this.newSession(row.id) });
     }
 
     if (!me) return json({ error: "unauthorized" }, 401);
@@ -95,24 +157,18 @@ export class Room extends DurableObject {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
-    // ホーム画面に追加したアプリは Safari と保存領域が別なので、起動 URL に本人の鍵を入れておく
-    if (path === "/api/manifest") {
-      const manifest = {
-        name: "ハムハムトーク",
-        short_name: "ハムハム",
-        start_url: `/?login=${token}`,
-        scope: "/",
-        display: "standalone",
-        background_color: "#FFF6EE",
-        theme_color: "#FFF6EE",
-        icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-        ],
-      };
-      return new Response(JSON.stringify(manifest), {
-        headers: { "Content-Type": "application/manifest+json; charset=utf-8", "Cache-Control": "no-store" },
-      });
+    if (path === "/api/password" && request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!validPassword(body.password)) return json({ error: `パスワードは${MIN_PASSWORD}文字以上にしてほしいはむ` }, 400);
+      this.sql.exec("UPDATE members SET pass = ?, fails = 0, lock_until = 0 WHERE id = ?", await hashPassword(body.password), me.id);
+      // ほかの端末は、新しいパスワードでログインしなおしてもらう
+      this.sql.exec("DELETE FROM sessions WHERE member = ? AND token != ?", me.id, token);
+      return json({ ok: true });
+    }
+
+    if (path === "/api/logout" && request.method === "POST") {
+      this.sql.exec("DELETE FROM sessions WHERE token = ?", token);
+      return json({ ok: true });
     }
 
     if (path === "/api/push" && request.method === "POST") {
