@@ -66,9 +66,10 @@ header .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-ove
 header .days { font-size: 12px; color: var(--sub); }
 .icon-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; }
 .icon-btn:active { background: var(--soft); }
-#banner { background: var(--soft); padding: 12px 16px; font-size: 14px; display: flex; gap: 12px; align-items: center; }
-#banner span { flex: 1; }
-#banner button { background: var(--accent); color: #fff; border-radius: 999px; padding: 8px 14px; font-weight: 700; white-space: nowrap; }
+#banner, .banner { background: var(--soft); padding: 12px 16px; font-size: 14px; display: flex; gap: 12px; align-items: center; }
+#banner span, .banner span { flex: 1; }
+.banner .x { background: none !important; color: var(--sub) !important; padding: 8px !important; }
+#banner button, .banner button { background: var(--accent); color: #fff; border-radius: 999px; padding: 8px 14px; font-weight: 700; white-space: nowrap; }
 
 #log { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; }
 .day { align-self: center; font-size: 12px; color: var(--sub); background: var(--soft); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
@@ -155,6 +156,7 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
     <button class="icon-btn" id="menu-btn" aria-label="メニュー">☰</button>
   </header>
   <div id="banner" hidden><span>まだひとりはむ。招待リンクを送って、あの人を呼ぶはむ🐹</span><button id="invite-btn">リンクをコピー</button></div>
+  <div id="notify-banner" class="banner" hidden><span id="notify-text"></span><button id="notify-on">オンにする</button><button id="notify-x" class="x" aria-label="とじる">✕</button></div>
   <div id="log" aria-live="polite"><div id="empty">さいしょのひとことを<br>送ってみるはむ🐹💕</div></div>
   <div id="status" hidden>つなぎなおしてるはむ…</div>
   <div id="stickers" hidden></div>
@@ -168,7 +170,7 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
 
 <dialog id="menu">
   <h2>せってい</h2>
-  <button class="item" id="notify-btn">🔔 通知をオンにする<small>iPhone は「ホーム画面に追加」したアプリの中でログインして押すはむ</small></button>
+  <button class="item" id="notify-btn">🔔 通知をオンにする<small>お試し通知が1通とどくはむ。iPhone はホーム画面アプリから</small></button>
   <button class="item" id="pass-btn">🔑 パスワードを変える<small>ほかの端末はログアウトされるはむ</small></button>
   <button class="item" id="logout-btn">🚪 ログアウト<small>べつの端末では、なまえとパスワードでログインできるはむ</small></button>
   <label>💕 付き合った日<input type="date" id="anniv"></label>
@@ -276,7 +278,13 @@ function startChat() {
     $("stickers").append(b);
   }
   connect();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js")
+      // すでに許可ずみの端末は、ログインしなおしても自動で通知先に登録しなおす
+      .then(() => { if (window.Notification?.permission === "granted" && "PushManager" in window) return subscribePush(false); })
+      .catch(() => {});
+  }
+  showNotifyBanner();
 }
 function setPartner(name) {
   $("partner").textContent = name ? `${name} 💕` : "ハムハムトーク";
@@ -299,7 +307,8 @@ function connect() {
     setTimeout(connect, Math.min(1000 * 2 ** retry++, 15000));
   };
 }
-setInterval(() => { if (ws?.readyState === 1) ws.send("ping"); }, 25000);
+// 画面を見ているあいだだけ生存確認を送る（止まるとサーバーは「見ていない」と判断して通知を出す）
+setInterval(() => { if (ws?.readyState === 1 && document.visibilityState === "visible") ws.send("ping"); }, 10000);
 
 function handle(d) {
   if (d.t === "init") {
@@ -311,6 +320,7 @@ function handle(d) {
     messages.set(d.m.id, d.m);
     if (d.cid) pending.delete(d.cid);
     render(d.m.sender === meId || nearBottom()); markRead();
+    if (d.m.sender !== meId) { try { navigator.vibrate?.(80); } catch {} } // 開いているときも軽くブルッ（Android）
   } else if (d.t === "read") {
     if (d.by !== meId) { partnerRead = Math.max(partnerRead, d.id); render(false); }
   } else if (d.t === "partner") {
@@ -413,18 +423,42 @@ $("logout-btn").addEventListener("click", async () => {
   location.reload();
 });
 $("anniv").addEventListener("change", (e) => ws?.readyState === 1 && ws.send(JSON.stringify({ t: "anniv", date: e.target.value })));
-$("notify-btn").addEventListener("click", async () => {
+const inApp = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+/** この端末を通知先として登録する。test=true ならお試し通知も送る */
+async function subscribePush(test) {
+  const reg = await navigator.serviceWorker.ready;
+  const key = Uint8Array.from(atob(state.vapidKey.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+  const res = await api("/api/push", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint, test }) });
+  if (!res.ok) throw new Error("登録に失敗したはむ");
+  if (test && res.test !== "ok") throw new Error(`お試し通知が送れなかったはむ（${res.test}）`);
+}
+async function enableNotifications() {
   try {
-    if (!("PushManager" in window)) throw new Error("この画面では通知が使えないはむ（iPhone はホーム画面に追加してね）");
-    if ((await Notification.requestPermission()) !== "granted") throw new Error("通知がゆるされてないはむ");
-    const reg = await navigator.serviceWorker.ready;
-    const key = Uint8Array.from(atob(state.vapidKey.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-    const res = await api("/api/push", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) });
-    if (!res.ok) throw new Error("登録に失敗したはむ");
-    toast("通知をオンにしたはむ🔔");
+    if (!("PushManager" in window) || !("Notification" in window)) {
+      throw new Error(isIOS && !inApp ? "iPhone は共有ボタン →「ホーム画面に追加」したアプリで開いてね" : "このブラウザは通知に対応してないはむ");
+    }
+    if ((await Notification.requestPermission()) !== "granted") throw new Error("通知がゆるされてないはむ。本体の設定で許可してね");
+    await subscribePush(true);
+    toast("通知オン🔔 お試し通知を送ったはむ");
   } catch (err) { toast(err.message); }
-});
+  showNotifyBanner();
+}
+function showNotifyBanner() {
+  const supported = "PushManager" in window && "Notification" in window;
+  const needsInstall = !supported && isIOS && !inApp;
+  const canAsk = supported && Notification.permission === "default";
+  $("notify-banner").hidden = store.get("notify-dismissed") === "1" || !(needsInstall || canAsk);
+  $("notify-text").textContent = needsInstall
+    ? "通知を受けとるには、共有ボタン →「ホーム画面に追加」して、そのアプリから開くはむ"
+    : "通知をオンにすると、メッセージが来たときにスマホが鳴るはむ🔔";
+  $("notify-on").hidden = needsInstall;
+}
+$("notify-btn").addEventListener("click", enableNotifications);
+$("notify-on").addEventListener("click", enableNotifications);
+$("notify-x").addEventListener("click", () => { store.set("notify-dismissed", "1"); showNotifyBanner(); });
 
 boot().catch(() => { $("gate").hidden = false; $("gate-error").textContent = "つながらなかったはむ…もういちど開いてね"; });
 </script>

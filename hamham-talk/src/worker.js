@@ -152,7 +152,7 @@ export class Room extends DurableObject {
       if (request.headers.get("Upgrade") !== "websocket") return json({ error: "websocket only" }, 426);
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1]);
-      pair[1].serializeAttachment({ id: me.id, visible: true });
+      pair[1].serializeAttachment({ id: me.id, visible: true, seen: Date.now() });
       pair[1].send(JSON.stringify(this.initPayload(me.id)));
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
@@ -172,11 +172,14 @@ export class Room extends DurableObject {
     }
 
     if (path === "/api/push" && request.method === "POST") {
-      const { endpoint } = await request.json().catch(() => ({}));
+      const body = await request.json().catch(() => ({}));
+      const { endpoint } = body;
       if (typeof endpoint !== "string" || !endpoint.startsWith("https://")) return json({ error: "bad endpoint" }, 400);
       this.sql.exec("INSERT OR REPLACE INTO subs (endpoint, member) VALUES (?, ?)", endpoint, me.id);
       this.set("origin", url.origin);
-      return json({ ok: true });
+      // 登録できたかすぐ分かるように、この端末へお試し通知を 1 通送る
+      const test = body.test ? await sendPush(endpoint, url.origin, await this.vapid()).catch((e) => `error ${e.message}`) : null;
+      return json({ ok: true, test });
     }
 
     return json({ error: "not found" }, 404);
@@ -233,7 +236,7 @@ export class Room extends DurableObject {
       this.sql.exec("UPDATE members SET read_id = MAX(read_id, ?) WHERE id = ?", id, meId);
       this.broadcast({ t: "read", by: meId, id });
     } else if (data.t === "vis") {
-      ws.serializeAttachment({ ...att, visible: !!data.v });
+      ws.serializeAttachment({ ...att, visible: !!data.v, seen: Date.now() });
     } else if (data.t === "anniv") {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : "";
       this.set("anniversary", date);
@@ -249,9 +252,14 @@ export class Room extends DurableObject {
 
   /** 相手がアプリを開いていないときだけ通知を送る */
   async notifyPartner(senderId) {
+    // 「いま画面を見ている」= 表示中で、直近 25 秒以内に生存確認(ping)が来ている端末がある。
+    // スマホはアプリを閉じた瞬間に連絡が途切れることがあるので、ping が止まったら見ていない扱いにする。
+    const now = Date.now();
     const watching = this.ctx.getWebSockets().some((ws) => {
       const a = ws.deserializeAttachment();
-      return a && a.id !== senderId && a.visible;
+      if (!a || a.id === senderId || !a.visible) return false;
+      const lastPing = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0;
+      return now - Math.max(a.seen ?? 0, lastPing) < 25000;
     });
     if (watching) return;
     const subs = this.sql.exec("SELECT endpoint FROM subs WHERE member != ?", senderId).toArray();

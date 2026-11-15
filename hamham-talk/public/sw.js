@@ -9,7 +9,9 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       tag: "hamham",
-      renotify: true,
+      renotify: true, // 2 通目以降も毎回ちゃんと鳴らす
+      silent: false,
+      vibrate: [200, 100, 200, 100, 400], // Android のバイブ（iPhone は本体の設定どおりに振動）
     })
   );
 });
