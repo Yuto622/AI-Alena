@@ -34,10 +34,20 @@ async function checkPassword(password, stored) {
 const validPassword = (p) => typeof p === "string" && p.length >= MIN_PASSWORD && p.length <= 100;
 
 export default {
-  fetch(request, env) {
-    if (new URL(request.url).pathname.startsWith("/api/")) {
-      // 世界にひとつだけの「ふたりのおへや」
-      return env.ROOM.get(env.ROOM.idFromName("room")).fetch(request);
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    // 世界にひとつだけの「ふたりのおへや」
+    const room = env.ROOM.get(env.ROOM.idFromName("room"));
+    if (url.pathname.startsWith("/api/")) return room.fetch(request);
+
+    if (url.pathname.startsWith("/stickers/")) {
+      const token = url.searchParams.get("token") ?? "";
+      const who = await room.fetch(new Request(`${url.origin}/api/state?token=${encodeURIComponent(token)}`)).then((r) => r.json());
+      if (!who.me) return json({ error: "unauthorized" }, 401);
+      const res = await env.ASSETS.fetch(new Request(`${url.origin}${url.pathname}`));
+      const out = new Response(res.body, res);
+      out.headers.set("Cache-Control", "private, max-age=31536000, immutable");
+      return out;
     }
     return new Response("not found", { status: 404 });
   },

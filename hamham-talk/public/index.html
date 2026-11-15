@@ -80,6 +80,10 @@ header .days { font-size: 12px; color: var(--sub); }
   background: var(--theirs); border-bottom-left-radius: 6px; box-shadow: 0 1px 0 var(--line);
 }
 .mine .bubble { background: var(--mine); color: var(--mine-ink); border-radius: 20px; border-bottom-right-radius: 6px; box-shadow: none; }
+#stickers { max-height: 40vh; overflow-y: auto; }
+#stickers button.pic { padding: 4px; }
+#stickers button.pic img { display: block; width: 100%; height: 64px; object-fit: contain; }
+.stk { display: block; width: min(42vw, 170px); height: auto; }
 .sticker {
   text-align: center; padding: 10px 16px 8px; border-radius: 28px; background: var(--soft);
   border: 3px solid #fff; box-shadow: 0 2px 8px rgba(240, 96, 124, .25); transform: rotate(-2deg);
@@ -169,7 +173,7 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
     <button type="button" class="icon-btn" id="photo-btn" aria-label="写真">📷</button>
     <input type="file" id="photo" accept="image/*" hidden>
     <button type="button" class="icon-btn" id="sticker-btn" aria-label="スタンプ">🐹</button>
-    <textarea id="text" rows="1" placeholder="メッセージを入力…" enterkeyhint="send"></textarea>
+    <textarea id="text" rows="1" placeholder="メッセージ" enterkeyhint="send"></textarea>
     <button type="button" id="hamu" aria-pressed="false" title="文末に自動で「はむ」をつける">はむ</button>
     <button id="send" aria-label="送信" disabled>➤</button>
   </form>
@@ -190,6 +194,8 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
 import { toHamu, daysTogether } from "/hamu.js";
 
 const $ = (id) => document.getElementById(id);
+const IMG_STICKERS = ["daisuki", "bunny", "surprised", "bunnyback", "bee", "hug", "sleep", "sushi", "sandwich", "onigiri", "doctor", "bus"];
+const stickerSrc = (name) => `/stickers/${name}.webp?token=${encodeURIComponent(token)}`;
 const STICKERS = [
   ["🐹💕", "大好きはむ"], ["🥰", "しあわせはむ"], ["🫶", "ぎゅーはむ"], ["😘", "ちゅっはむ"],
   ["🥺", "会いたいはむ"], ["🙏✨", "ありがとはむ"], ["💮", "えらいはむ"], ["😳", "てれるはむ"],
@@ -277,6 +283,14 @@ function startChat() {
   $("gate").hidden = true; $("app").hidden = false;
   setPartner(state.partner);
   $("hamu").setAttribute("aria-pressed", hamuMode);
+  for (const name of IMG_STICKERS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "pic"; b.setAttribute("aria-label", "スタンプ");
+    const im = document.createElement("img"); im.src = stickerSrc(name); im.alt = ""; im.loading = "lazy";
+    b.append(im);
+    b.addEventListener("click", () => { send("sticker", `img:${name}`); $("stickers").hidden = true; });
+    $("stickers").append(b);
+  }
   for (const [emo, cap] of STICKERS) {
     const b = document.createElement("button");
     b.type = "button";
@@ -363,6 +377,9 @@ function render(stick) {
       if (w && h) { im.width = +w; im.height = +h; }
       im.addEventListener("click", () => openViewer(im.src));
       body.append(im);
+    } else if (m.kind === "sticker" && /^img:[a-z]{2,16}$/.test(m.body)) {
+      body = document.createElement("img"); body.className = "stk"; body.alt = "スタンプ";
+      body.src = stickerSrc(m.body.slice(4));
     } else if (m.kind === "sticker") {
       const [emo, cap = ""] = m.body.split("|");
       body = document.createElement("div"); body.className = "sticker";

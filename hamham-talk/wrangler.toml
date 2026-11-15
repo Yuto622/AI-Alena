@@ -4,6 +4,9 @@ compatibility_date = "2025-10-01"
 
 [assets]
 directory = "./public"
+binding = "ASSETS"
+# スタンプ画像はログインしているふたりにだけ配る（Worker が先に受けて確認する）
+run_worker_first = ["/stickers/*"]
 
 [[durable_objects.bindings]]
 name = "ROOM"
