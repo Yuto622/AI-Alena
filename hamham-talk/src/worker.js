@@ -2,7 +2,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { generateVapidKeys, sendPush } from "./push.js";
 
-const HISTORY_LIMIT = 300;
+const HISTORY_LIMIT = 1000;
 const MAX_TEXT = 2000;
 
 const json = (data, status = 200) =>

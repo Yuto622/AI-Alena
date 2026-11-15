@@ -71,7 +71,13 @@ header .days { font-size: 12px; color: var(--sub); }
 .banner .x { background: none !important; color: var(--sub) !important; padding: 8px !important; }
 #banner button, .banner button { background: var(--accent); color: #fff; border-radius: 999px; padding: 8px 14px; font-weight: 700; white-space: nowrap; }
 
-#log { flex: 1; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; }
+#logwrap { position: relative; flex: 1; min-height: 0; display: flex; }
+#log { flex: 1; min-width: 0; overflow-y: auto; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 4px;
+  overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+#down { position: absolute; right: 14px; bottom: 12px; width: 46px; height: 46px; border-radius: 50%; background: var(--panel);
+  color: var(--accent); font-size: 22px; font-weight: 800; box-shadow: 0 2px 12px rgba(0,0,0,.28); }
+#unread { position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; padding: 0 5px;
+  background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
 .day { align-self: center; font-size: 12px; color: var(--sub); background: var(--soft); border-radius: 999px; padding: 2px 12px; margin: 10px 0 6px; }
 .row { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
 .row.mine { flex-direction: row-reverse; }
@@ -94,7 +100,7 @@ header .days { font-size: 12px; color: var(--sub); }
 .meta { font-size: 11px; color: var(--sub); line-height: 1.3; text-align: right; flex-shrink: 0; }
 .row:not(.mine) .meta { text-align: left; }
 .pending { opacity: .55; }
-.photo { display: block; max-width: min(72vw, 320px); max-height: 60vh; width: auto; height: auto; border-radius: 18px; background: var(--soft); cursor: zoom-in; }
+.photo { display: block; width: min(72vw, 320px); height: auto; border-radius: 18px; background: var(--soft); cursor: zoom-in; }
 .photo-box { border-radius: 18px; overflow: hidden; line-height: 0; }
 #viewer { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.92); display: grid; place-items: center; }
 #viewer img { max-width: 100vw; max-height: 100dvh; object-fit: contain; }
@@ -166,7 +172,10 @@ dialog .close { margin-top: 16px; width: 100%; padding: 12px; border-radius: 14p
   </header>
   <div id="banner" hidden><span>まだひとりはむ。招待リンクを送って、あの人を呼ぶはむ🐹</span><button id="invite-btn">リンクをコピー</button></div>
   <div id="notify-banner" class="banner" hidden><span id="notify-text"></span><button id="notify-on">オンにする</button><button id="notify-x" class="x" aria-label="とじる">✕</button></div>
-  <div id="log" aria-live="polite"><div id="empty">さいしょのひとことを<br>送ってみるはむ🐹💕</div></div>
+  <div id="logwrap">
+    <div id="log" aria-live="polite"></div>
+    <button id="down" type="button" hidden aria-label="いちばん下へ">↓<span id="unread" hidden></span></button>
+  </div>
   <div id="status" hidden>つなぎなおしてるはむ…</div>
   <div id="stickers" hidden></div>
   <form id="composer">
@@ -335,14 +344,18 @@ setInterval(() => { if (ws?.readyState === 1 && document.visibilityState === "vi
 function handle(d) {
   if (d.t === "init") {
     meId = d.me; partnerRead = d.partnerRead; anniversary = d.anniversary;
+    const first = !handle.started; handle.started = true;
     messages.clear();
     for (const m of d.messages) messages.set(m.id, m);
-    setPartner(d.partner); showDays(); render(true); markRead();
+    // つなぎなおしたときに、読んでいる位置が飛ばないようにする（最初の 1 回だけ下まで）
+    setPartner(d.partner); showDays(); render(first || nearBottom()); markRead();
   } else if (d.t === "msg") {
     messages.set(d.m.id, d.m);
-    if (d.cid) pending.delete(d.cid);
-    render(d.m.sender === meId || nearBottom()); markRead();
-    if (d.m.sender !== meId) { try { navigator.vibrate?.(80); } catch {} } // 開いているときも軽くブルッ（Android）
+    if (d.cid) { adopt(d.cid, d.m.id); pending.delete(d.cid); }
+    const mine = d.m.sender === meId, stick = mine || nearBottom();
+    if (!mine && !stick) unread++;
+    render(stick); markRead();
+    if (!mine) { try { navigator.vibrate?.(80); } catch {} } // 開いているときも軽くブルッ（Android）
   } else if (d.t === "read") {
     if (d.by !== meId) { partnerRead = Math.max(partnerRead, d.id); render(false); }
   } else if (d.t === "partner") {
@@ -356,46 +369,94 @@ const log = $("log");
 const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 120;
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString("ja-JP", { hour: "numeric", minute: "2-digit" });
 const fmtDay = (ts) => new Date(ts).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" });
+const STK_SIZE = { daisuki: [580, 456], bunny: [580, 542], surprised: [578, 538], bunnyback: [580, 498], bee: [550, 578], hug: [580, 450],
+  sleep: [580, 442], sushi: [536, 582], sandwich: [580, 572], onigiri: [528, 578], doctor: [576, 458], bus: [580, 566] };
+
+const nodes = new Map(); // 表示ずみの行（キー → 要素）。作り直さず使い回して、スクロール位置を守る
+let emptyEl = null, unread = 0;
+
+function buildRow(m) {
+  const row = document.createElement("div"); row.className = "row";
+  let body;
+  if (m.kind === "image") {
+    const [id, w, h] = m.body.split("|");
+    body = document.createElement("div"); body.className = "photo-box";
+    const im = document.createElement("img"); im.className = "photo"; im.alt = "写真"; im.loading = "lazy";
+    im.src = m.preview ?? `/api/img/${id}?token=${encodeURIComponent(token)}`;
+    if (w && h) im.style.aspectRatio = `${w} / ${h}`; // 読みこみ前から高さが決まるので、スクロール中にずれない
+    im.addEventListener("click", () => openViewer(im.src));
+    body.append(im);
+  } else if (m.kind === "sticker" && /^img:[a-z]{2,16}$/.test(m.body)) {
+    const name = m.body.slice(4);
+    body = document.createElement("img"); body.className = "stk"; body.alt = "スタンプ"; body.src = stickerSrc(name);
+    if (STK_SIZE[name]) body.style.aspectRatio = STK_SIZE[name].join(" / ");
+  } else if (m.kind === "sticker") {
+    const [emo, cap = ""] = m.body.split("|");
+    body = document.createElement("div"); body.className = "sticker";
+    const e = document.createElement("div"); e.className = "emo"; e.textContent = emo;
+    const c = document.createElement("div"); c.className = "cap"; c.textContent = cap;
+    body.append(e, c);
+  } else {
+    body = document.createElement("div"); body.className = "bubble"; body.textContent = m.body;
+  }
+  const meta = document.createElement("div"); meta.className = "meta";
+  row.append(body, meta);
+  return row;
+}
+function updateRow(row, m) {
+  row.classList.toggle("mine", m.sender === meId);
+  row.classList.toggle("pending", !m.id);
+  const text = (m.sender === meId && m.id && m.id <= partnerRead ? "既読<br>" : "") + (m.id ? fmtTime(m.ts) : "送信中");
+  const meta = row.lastChild;
+  if (meta._t !== text) { meta.innerHTML = text; meta._t = text; }
+}
+/** 送信中の行を、サーバーから届いた本物のメッセージの行として引き継ぐ（ちらつき防止） */
+function adopt(cid, id) {
+  if (nodes.has("p" + cid)) { nodes.set("m" + id, nodes.get("p" + cid)); nodes.delete("p" + cid); }
+}
 
 function render(stick) {
-  const all = [...messages.values(), ...[...pending.values()].map((p) => p.local)];
-  log.replaceChildren();
-  if (!all.length) { const e = document.createElement("div"); e.id = "empty"; e.innerHTML = "さいしょのひとことを<br>送ってみるはむ🐹💕"; log.append(e); return; }
-  let lastDay = "";
+  const all = [...messages.values(), ...[...pending.entries()].map(([cid, p]) => ({ ...p.local, cid }))];
+  if (!all.length) {
+    nodes.clear();
+    if (!emptyEl) { emptyEl = document.createElement("div"); emptyEl.id = "empty"; emptyEl.innerHTML = "さいしょのひとことを<br>送ってみるはむ🐹💕"; }
+    log.replaceChildren(emptyEl);
+    return;
+  }
+  if (emptyEl?.parentNode) emptyEl.remove();
+  const seen = new Set();
+  let cursor = log.firstChild, lastDay = "";
+  const place = (key, make, m) => {
+    let el = nodes.get(key);
+    if (!el) { el = make(); nodes.set(key, el); }
+    if (m) updateRow(el, m);
+    seen.add(key);
+    if (el === cursor) cursor = cursor.nextSibling; else log.insertBefore(el, cursor);
+  };
   for (const m of all) {
     const day = fmtDay(m.ts);
-    if (day !== lastDay) { const d = document.createElement("div"); d.className = "day"; d.textContent = day; log.append(d); lastDay = day; }
-    const mine = m.sender === meId;
-    const row = document.createElement("div");
-    row.className = `row${mine ? " mine" : ""}${m.id ? "" : " pending"}`;
-    let body;
-    if (m.kind === "image") {
-      const [id, w, h] = m.body.split("|");
-      body = document.createElement("div"); body.className = "photo-box";
-      const im = document.createElement("img"); im.className = "photo"; im.alt = "写真"; im.loading = "lazy";
-      im.src = m.preview ?? `/api/img/${id}?token=${encodeURIComponent(token)}`;
-      if (w && h) { im.width = +w; im.height = +h; }
-      im.addEventListener("click", () => openViewer(im.src));
-      body.append(im);
-    } else if (m.kind === "sticker" && /^img:[a-z]{2,16}$/.test(m.body)) {
-      body = document.createElement("img"); body.className = "stk"; body.alt = "スタンプ";
-      body.src = stickerSrc(m.body.slice(4));
-    } else if (m.kind === "sticker") {
-      const [emo, cap = ""] = m.body.split("|");
-      body = document.createElement("div"); body.className = "sticker";
-      const e = document.createElement("div"); e.className = "emo"; e.textContent = emo;
-      const c = document.createElement("div"); c.className = "cap"; c.textContent = cap;
-      body.append(e, c);
-    } else {
-      body = document.createElement("div"); body.className = "bubble"; body.textContent = m.body;
+    if (day !== lastDay) {
+      place("d" + day, () => { const d = document.createElement("div"); d.className = "day"; d.textContent = day; return d; });
+      lastDay = day;
     }
-    const meta = document.createElement("div"); meta.className = "meta";
-    meta.innerHTML = (mine && m.id && m.id <= partnerRead ? "既読<br>" : "") + (m.id ? fmtTime(m.ts) : "送信中");
-    row.append(body, meta);
-    log.append(row);
+    place(m.id ? "m" + m.id : "p" + m.cid, () => buildRow(m), m);
   }
+  while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
+  for (const k of nodes.keys()) if (!seen.has(k)) nodes.delete(k);
   if (stick) log.scrollTop = log.scrollHeight;
+  updateDown();
 }
+
+/** 上を読んでいるときだけ「↓」ボタンを出す。読んでいるあいだに届いた数も表示 */
+function updateDown() {
+  const away = !nearBottom();
+  if (!away) unread = 0;
+  $("down").hidden = !away;
+  $("unread").hidden = !unread; $("unread").textContent = unread ? (unread > 99 ? "99+" : String(unread)) : "";
+}
+log.addEventListener("scroll", updateDown, { passive: true });
+$("down").addEventListener("click", () => log.scrollTo({ top: log.scrollHeight, behavior: "smooth" }));
+log.addEventListener("pointerdown", () => { $("stickers").hidden = true; }, { passive: true });
 
 function markRead() {
   if (document.visibilityState !== "visible" || ws?.readyState !== 1) return;
@@ -476,7 +537,12 @@ $("photo").addEventListener("change", async (e) => {
 function openViewer(src) { $("viewer").querySelector("img").src = src; $("viewer").hidden = false; }
 $("viewer").addEventListener("click", (e) => { if (e.target.id !== "viewer-close" || e.preventDefault() === undefined) $("viewer").hidden = true; });
 
-$("sticker-btn").addEventListener("click", () => { $("stickers").hidden = !$("stickers").hidden; });
+$("sticker-btn").addEventListener("click", () => {
+  const atBottom = nearBottom();
+  $("stickers").hidden = !$("stickers").hidden;
+  if (atBottom) requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+});
+text.addEventListener("focus", () => { $("stickers").hidden = true; });
 
 // ---- メニュー ----
 $("menu-btn").addEventListener("click", () => $("menu").showModal());
